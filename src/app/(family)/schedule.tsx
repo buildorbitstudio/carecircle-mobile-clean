@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
 import { AppCard, AppText, FeatureRow, Screen, SectionHeader } from '@/components/ui';
-import { colors, spacing } from '@/theme';
+import { colors } from '@/theme';
 
 export default function ScheduleScreen() {
   return (

@@ -77,10 +77,17 @@ export function useDashboardData() {
       const userId = session?.user.id;
       if (!userId) return;
 
-      refresh ? setIsRefreshing(true) : setIsLoading(true);
+      if (refresh) {
+        setIsRefreshing(true);
+      } else {
+        setIsLoading(true);
+      }
       setError(null);
 
       try {
+        const { error: expiryError } = await supabase.rpc('refresh_unanswered_care_pings');
+        if (expiryError) throw expiryError;
+
         const [profileResult, membershipResult] = await Promise.all([
           supabase
             .from('users_profile')
@@ -244,6 +251,28 @@ export function useDashboardData() {
     const task = setTimeout(() => void load(), 0);
     return () => clearTimeout(task);
   }, [load]);
+
+  useEffect(() => {
+    if (!data?.elder.id) return;
+
+    const channel = supabase
+      .channel(`dashboard-care-pings-${data.elder.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'care_pings',
+          filter: `elder_profile_id=eq.${data.elder.id}`,
+        },
+        () => void load(true),
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [data?.elder.id, load]);
 
   return {
     data,
