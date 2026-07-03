@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
-import { AppButton, AppText, Screen } from '@/components/ui';
+import { AppButton, AppText, FeedbackBanner, Screen, StateView } from '@/components/ui';
 import {
   isPingType,
   pingTypeConfig,
@@ -72,10 +72,7 @@ export default function ElderModeScreen() {
   if (isLoading && !context) {
     return (
       <Screen contentStyle={styles.centered} scroll={false}>
-        <ActivityIndicator color={colors.primary} size="large" />
-        <AppText color="inkMuted" style={styles.largeSupport}>
-          Checking for a message…
-        </AppText>
+        <StateView count={2} state="loading" />
       </Screen>
     );
   }
@@ -90,7 +87,7 @@ export default function ElderModeScreen() {
         <AppText align="center" color="inkMuted" style={styles.largeSupport}>
           {error}
         </AppText>
-        <AppButton label="Try again" onPress={() => void retry()} />
+        <AppButton label="Try again" onPress={() => void retry()} size="lg" />
       </Screen>
     );
   }
@@ -110,6 +107,7 @@ export default function ElderModeScreen() {
         </AppText>
         <AppButton
           label="Done"
+          size="lg"
           onPress={() => {
             setConfirmation(null);
             router.replace('/(family)');
@@ -131,7 +129,11 @@ export default function ElderModeScreen() {
         <AppText align="center" color="inkMuted" style={styles.largeSupport}>
           There are no new Care Pings right now.
         </AppText>
-        <AppButton label="Return to family view" onPress={() => router.replace('/(family)')} />
+        <AppButton
+          label="Return to family view"
+          onPress={() => router.replace('/(family)')}
+          size="lg"
+        />
       </Screen>
     );
   }
@@ -149,6 +151,7 @@ export default function ElderModeScreen() {
         <Pressable
           accessibilityLabel="Exit Elder Mode"
           accessibilityRole="button"
+          accessibilityHint="Returns to the family dashboard"
           onPress={() => router.replace('/(family)')}
           style={styles.close}>
           <Ionicons color={colors.inkMuted} name="close" size={28} />
@@ -181,11 +184,11 @@ export default function ElderModeScreen() {
       </View>
 
       {responseError ? (
-        <View accessibilityRole="alert" style={styles.errorBanner}>
-          <AppText align="center" color="danger" style={styles.errorText}>
-            {responseError}
-          </AppText>
-        </View>
+        <FeedbackBanner
+          message="Please check the connection and tap your answer again."
+          title={responseError}
+          tone="error"
+        />
       ) : null}
 
       <View style={styles.responses}>
@@ -194,6 +197,9 @@ export default function ElderModeScreen() {
           return (
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel={`Respond ${response.label}`}
+              accessibilityHint="Sends this response to your family"
+              accessibilityState={{ busy: isResponding, disabled: isResponding }}
               disabled={isResponding}
               key={response.label}
               onPress={() => void respond(response.label)}
@@ -247,8 +253,14 @@ const styles = StyleSheet.create({
     width: 44,
   },
   brandName: { fontSize: 20, fontWeight: '700' },
-  close: { marginLeft: 'auto', padding: spacing.sm },
-  message: { alignItems: 'center', gap: spacing.lg },
+  close: {
+    alignItems: 'center',
+    height: 52,
+    justifyContent: 'center',
+    marginLeft: 'auto',
+    width: 52,
+  },
+  message: { alignItems: 'center', gap: spacing.xl, paddingVertical: spacing.lg },
   typeBadge: {
     alignItems: 'center',
     backgroundColor: colors.primarySoft,
@@ -258,27 +270,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
   },
-  checkingIn: { fontSize: 20, lineHeight: 28 },
+  checkingIn: { fontSize: 21, fontWeight: '500', lineHeight: 31 },
   question: {
     color: colors.ink,
-    fontSize: 36,
+    fontSize: 40,
     fontWeight: '700',
-    lineHeight: 45,
+    lineHeight: 50,
   },
   tapPrompt: { fontSize: 18, lineHeight: 26 },
-  responses: { gap: spacing.md },
+  responses: { gap: spacing.lg },
   response: {
     alignItems: 'center',
     borderRadius: radius.lg,
     flexDirection: 'row',
     gap: spacing.lg,
-    minHeight: 84,
+    borderColor: colors.borderStrong,
+    borderWidth: 1,
+    minHeight: 92,
     paddingHorizontal: spacing.xl,
   },
   pressed: { opacity: 0.76, transform: [{ scale: 0.99 }] },
   disabled: { opacity: 0.55 },
   emoji: { fontSize: 34, lineHeight: 42 },
-  responseLabel: { flex: 1, fontSize: 23, fontWeight: '700', lineHeight: 30 },
+  responseLabel: { flex: 1, fontSize: 24, fontWeight: '700', lineHeight: 32 },
   largeHeading: {
     color: colors.ink,
     fontSize: 34,
@@ -296,10 +310,4 @@ const styles = StyleSheet.create({
   },
   confirmIconUrgent: { backgroundColor: colors.dangerSoft },
   confirmEmoji: { color: colors.success, fontSize: 38, fontWeight: '700', lineHeight: 46 },
-  errorBanner: {
-    backgroundColor: colors.dangerSoft,
-    borderRadius: radius.md,
-    padding: spacing.lg,
-  },
-  errorText: { fontSize: 18, lineHeight: 26 },
 });

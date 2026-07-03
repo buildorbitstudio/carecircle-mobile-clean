@@ -1,13 +1,15 @@
 import { ActivityIndicator, Pressable, PressableProps, StyleSheet } from 'react-native';
 
-import { colors, radius, spacing } from '@/theme';
+import { buttonSizes, colors, radius } from '@/theme';
 import { AppText } from './AppText';
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
+type ButtonSize = keyof typeof buttonSizes;
 
 type AppButtonProps = PressableProps & {
   label: string;
   variant?: ButtonVariant;
+  size?: ButtonSize;
   loading?: boolean;
 };
 
@@ -25,6 +27,7 @@ const variantStyles = {
 export function AppButton({
   label,
   variant = 'primary',
+  size = 'md',
   loading,
   disabled,
   style,
@@ -35,9 +38,11 @@ export function AppButton({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={{ busy: Boolean(loading), disabled: Boolean(disabled || loading) }}
       disabled={disabled || loading}
       style={(state) => [
         styles.button,
+        buttonSizes[size],
         { backgroundColor: palette.backgroundColor, borderColor: palette.borderColor },
         state.pressed && styles.pressed,
         (disabled || loading) && styles.disabled,
@@ -57,12 +62,10 @@ export function AppButton({
 
 const styles = StyleSheet.create({
   button: {
-    minHeight: 54,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.md,
     borderWidth: 1,
-    paddingHorizontal: spacing.xl,
   },
   pressed: { opacity: 0.82, transform: [{ scale: 0.99 }] },
   disabled: { opacity: 0.5 },

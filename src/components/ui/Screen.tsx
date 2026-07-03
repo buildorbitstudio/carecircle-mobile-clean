@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors, spacing } from '@/theme';
+import { colors, layout, spacing } from '@/theme';
 
 type ScreenProps = PropsWithChildren<{
   scroll?: boolean;
@@ -31,6 +31,7 @@ export function Screen({
   const content = scroll ? (
     <ScrollView
       contentContainerStyle={[styles.content, contentStyle]}
+      contentInsetAdjustmentBehavior="automatic"
       keyboardShouldPersistTaps="handled"
       refreshControl={
         onRefresh ? (
@@ -66,15 +67,19 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   content: {
     flexGrow: 1,
-    gap: spacing.lg,
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xxl,
-    paddingTop: spacing.lg,
+    alignSelf: 'center',
+    gap: layout.sectionGap,
+    maxWidth: layout.contentMaxWidth,
+    paddingHorizontal: layout.screenGutter,
+    paddingBottom: layout.screenBottom,
+    paddingTop: layout.screenTop,
+    width: '100%',
   },
   footer: {
     backgroundColor: colors.canvas,
     borderTopColor: colors.border,
     borderTopWidth: StyleSheet.hairlineWidth,
-    padding: spacing.lg,
+    paddingHorizontal: layout.screenGutter,
+    paddingVertical: spacing.lg,
   },
 });

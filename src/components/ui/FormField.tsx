@@ -14,12 +14,14 @@ export function FormField({ label, error, style, ...props }: FormFieldProps) {
       <AppText variant="caption">{label}</AppText>
       <TextInput
         accessibilityLabel={label}
+        accessibilityHint={error}
+        accessibilityState={{ disabled: props.editable === false }}
         placeholderTextColor={colors.inkMuted}
         style={[styles.input, error && styles.inputError, style]}
         {...props}
       />
       {error ? (
-        <AppText color="danger" variant="caption">
+        <AppText accessibilityLiveRegion="polite" color="danger" variant="caption">
           {error}
         </AppText>
       ) : null}
@@ -36,7 +38,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1,
     color: colors.ink,
-    minHeight: 54,
+    minHeight: 56,
     paddingHorizontal: spacing.lg,
   },
   inputError: { borderColor: colors.danger },

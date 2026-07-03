@@ -1,18 +1,22 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from '@/providers/AuthProvider';
 import { NotificationBootstrap } from '@/components/NotificationBootstrap';
+import { StateView } from '@/components/ui';
+import { ToastProvider } from '@/providers/ToastProvider';
 import { colors } from '@/theme';
 
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <NotificationBootstrap />
-        <RootNavigator />
+        <ToastProvider>
+          <NotificationBootstrap />
+          <RootNavigator />
+        </ToastProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );
@@ -25,7 +29,9 @@ function RootNavigator() {
     return (
       <View style={styles.loading}>
         <StatusBar style="dark" />
-        <ActivityIndicator color={colors.primary} size="large" />
+        <View style={styles.loadingContent}>
+          <StateView count={2} state="loading" />
+        </View>
       </View>
     );
   }
@@ -35,12 +41,13 @@ function RootNavigator() {
       <StatusBar style="dark" />
       <Stack
         screenOptions={{
+          animation: 'fade_from_bottom',
           contentStyle: { backgroundColor: colors.canvas },
           headerBackButtonDisplayMode: 'minimal',
           headerShadowVisible: false,
           headerStyle: { backgroundColor: colors.canvas },
           headerTintColor: colors.primaryDark,
-          headerTitleStyle: { color: colors.ink, fontWeight: '600' },
+          headerTitleStyle: { color: colors.ink, fontSize: 18, fontWeight: '700' },
         }}>
         <Stack.Protected guard={!session}>
           <Stack.Screen name="index" options={{ headerShown: false }} />
@@ -73,4 +80,5 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
   },
+  loadingContent: { maxWidth: 560, padding: 24, width: '100%' },
 });

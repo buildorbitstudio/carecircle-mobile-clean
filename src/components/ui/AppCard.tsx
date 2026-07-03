@@ -3,10 +3,17 @@ import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 
 import { colors, radius, shadows, spacing } from '@/theme';
 
-type AppCardProps = PropsWithChildren<{ style?: StyleProp<ViewStyle> }>;
+type AppCardProps = PropsWithChildren<{
+  style?: StyleProp<ViewStyle>;
+  accessibilityLabel?: string;
+}>;
 
-export function AppCard({ children, style }: AppCardProps) {
-  return <View style={[styles.card, style]}>{children}</View>;
+export function AppCard({ accessibilityLabel, children, style }: AppCardProps) {
+  return (
+    <View accessibilityLabel={accessibilityLabel} style={[styles.card, style]}>
+      {children}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -15,7 +22,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: spacing.lg,
+    padding: spacing.xl,
     ...shadows.card,
   },
 });
