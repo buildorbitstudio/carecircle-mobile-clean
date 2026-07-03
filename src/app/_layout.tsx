@@ -50,7 +50,7 @@ function RootNavigator() {
         <Stack.Protected guard={Boolean(session) && onboardingComplete}>
           <Stack.Screen name="(family)" options={{ headerShown: false }} />
           <Stack.Screen name="elder" options={{ headerShown: false }} />
-          <Stack.Screen name="medications" options={{ title: 'Medications' }} />
+          <Stack.Screen name="medications" options={{ headerShown: false }} />
           <Stack.Screen name="appointments" options={{ title: 'Appointments' }} />
           <Stack.Screen name="timeline" options={{ title: 'Health Timeline' }} />
           <Stack.Screen name="emergency" options={{ title: 'Emergency Mode' }} />

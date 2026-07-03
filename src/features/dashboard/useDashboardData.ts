@@ -267,6 +267,26 @@ export function useDashboardData() {
         },
         () => void load(true),
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'medications',
+          filter: `elder_profile_id=eq.${data.elder.id}`,
+        },
+        () => void load(true),
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'medication_logs',
+          filter: `elder_profile_id=eq.${data.elder.id}`,
+        },
+        () => void load(true),
+      )
       .subscribe();
 
     return () => {
