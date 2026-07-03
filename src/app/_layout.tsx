@@ -17,7 +17,7 @@ export default function RootLayout() {
 }
 
 function RootNavigator() {
-  const { isLoading, session } = useAuth();
+  const { isLoading, onboardingComplete, session } = useAuth();
 
   if (isLoading) {
     return (
@@ -44,7 +44,10 @@ function RootNavigator() {
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         </Stack.Protected>
-        <Stack.Protected guard={Boolean(session)}>
+        <Stack.Protected guard={Boolean(session) && !onboardingComplete}>
+          <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
+        </Stack.Protected>
+        <Stack.Protected guard={Boolean(session) && onboardingComplete}>
           <Stack.Screen name="(family)" options={{ headerShown: false }} />
           <Stack.Screen name="elder" options={{ headerShown: false }} />
           <Stack.Screen name="medications" options={{ title: 'Medications' }} />

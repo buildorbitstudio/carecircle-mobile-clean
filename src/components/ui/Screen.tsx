@@ -2,6 +2,7 @@ import { PropsWithChildren, ReactNode } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   View,
@@ -15,13 +16,32 @@ type ScreenProps = PropsWithChildren<{
   scroll?: boolean;
   footer?: ReactNode;
   contentStyle?: ViewStyle;
+  refreshing?: boolean;
+  onRefresh?: () => void;
 }>;
 
-export function Screen({ children, scroll = true, footer, contentStyle }: ScreenProps) {
+export function Screen({
+  children,
+  scroll = true,
+  footer,
+  contentStyle,
+  refreshing = false,
+  onRefresh,
+}: ScreenProps) {
   const content = scroll ? (
     <ScrollView
       contentContainerStyle={[styles.content, contentStyle]}
       keyboardShouldPersistTaps="handled"
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl
+            colors={[colors.primary]}
+            onRefresh={onRefresh}
+            refreshing={refreshing}
+            tintColor={colors.primary}
+          />
+        ) : undefined
+      }
       showsVerticalScrollIndicator={false}>
       {children}
     </ScrollView>

@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
-import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, PropsWithChildren, useContext, useEffect, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
@@ -13,6 +13,8 @@ type SignUpInput = {
 type AuthContextValue = {
   session: Session | null;
   isLoading: boolean;
+  onboardingComplete: boolean;
+  refreshOnboardingStatus: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (input: SignUpInput) => Promise<{ requiresEmailConfirmation: boolean }>;
   signOut: () => Promise<void>;
@@ -28,9 +30,24 @@ function assertConfigured() {
   }
 }
 
+async function fetchOnboardingStatus(userId: string) {
+  const { data, error } = await supabase
+    .from('family_members')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return Boolean(data);
+}
+
 export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isRestoringSession, setIsRestoringSession] = useState(true);
+  const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(false);
+  const [onboardingComplete, setOnboardingComplete] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -43,7 +60,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
       }
 
       setSession(data.session);
-      setIsLoading(false);
+      setIsCheckingOnboarding(Boolean(data.session));
+      setIsRestoringSession(false);
     });
 
     const {
@@ -51,7 +69,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (!mounted) return;
       setSession(nextSession);
-      setIsLoading(false);
+      setOnboardingComplete(false);
+      setIsCheckingOnboarding(Boolean(nextSession));
+      setIsRestoringSession(false);
     });
 
     return () => {
@@ -59,6 +79,32 @@ export function AuthProvider({ children }: PropsWithChildren) {
       subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    const userId = session?.user.id;
+    if (!userId) return;
+
+    let cancelled = false;
+    void fetchOnboardingStatus(userId)
+      .then((complete) => {
+        if (cancelled) return;
+        setOnboardingComplete(complete);
+        setIsCheckingOnboarding(false);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        console.warn(
+          'Unable to check onboarding status:',
+          error instanceof Error ? error.message : error,
+        );
+        setOnboardingComplete(false);
+        setIsCheckingOnboarding(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user.id]);
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
@@ -74,38 +120,50 @@ export function AuthProvider({ children }: PropsWithChildren) {
     return () => subscription.remove();
   }, []);
 
-  const value = useMemo<AuthContextValue>(
-    () => ({
-      session,
-      isLoading,
-      signIn: async (email, password) => {
-        assertConfigured();
-        const { error } = await supabase.auth.signInWithPassword({
-          email: email.trim().toLowerCase(),
-          password,
-        });
-        if (error) throw error;
-      },
-      signUp: async ({ email, password, fullName }) => {
-        assertConfigured();
-        const { data, error } = await supabase.auth.signUp({
-          email: email.trim().toLowerCase(),
-          password,
-          options: {
-            data: { full_name: fullName.trim() },
-          },
-        });
-        if (error) throw error;
-        return { requiresEmailConfirmation: data.session === null };
-      },
-      signOut: async () => {
-        assertConfigured();
-        const { error } = await supabase.auth.signOut();
-        if (error) throw error;
-      },
-    }),
-    [isLoading, session],
-  );
+  const refreshOnboardingStatus = async () => {
+    if (!session?.user.id) {
+      setOnboardingComplete(false);
+      return;
+    }
+
+    setIsCheckingOnboarding(true);
+    try {
+      const complete = await fetchOnboardingStatus(session.user.id);
+      setOnboardingComplete(complete);
+    } finally {
+      setIsCheckingOnboarding(false);
+    }
+  };
+
+  const value: AuthContextValue = {
+    session,
+    isLoading: isRestoringSession || (Boolean(session) && isCheckingOnboarding),
+    onboardingComplete,
+    refreshOnboardingStatus,
+    signIn: async (email, password) => {
+      assertConfigured();
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+      if (error) throw error;
+    },
+    signUp: async ({ email, password, fullName }) => {
+      assertConfigured();
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
+        password,
+        options: { data: { full_name: fullName.trim() } },
+      });
+      if (error) throw error;
+      return { requiresEmailConfirmation: data.session === null };
+    },
+    signOut: async () => {
+      assertConfigured();
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+    },
+  };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
