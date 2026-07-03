@@ -87,6 +87,10 @@ export function useDashboardData() {
       try {
         const { error: expiryError } = await supabase.rpc('refresh_unanswered_care_pings');
         if (expiryError) throw expiryError;
+        const { error: overdueTasksError } = await supabase.rpc(
+          'refresh_overdue_care_tasks',
+        );
+        if (overdueTasksError) throw overdueTasksError;
 
         const [profileResult, membershipResult] = await Promise.all([
           supabase
@@ -283,6 +287,16 @@ export function useDashboardData() {
           event: 'INSERT',
           schema: 'public',
           table: 'medication_logs',
+          filter: `elder_profile_id=eq.${data.elder.id}`,
+        },
+        () => void load(true),
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'care_tasks',
           filter: `elder_profile_id=eq.${data.elder.id}`,
         },
         () => void load(true),
