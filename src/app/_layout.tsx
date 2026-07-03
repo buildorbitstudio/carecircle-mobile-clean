@@ -54,7 +54,7 @@ function RootNavigator() {
           <Stack.Screen name="appointments" options={{ title: 'Appointments' }} />
           <Stack.Screen name="timeline" options={{ title: 'Health Timeline' }} />
           <Stack.Screen name="emergency" options={{ title: 'Emergency Mode' }} />
-          <Stack.Screen name="documents" options={{ title: 'Documents' }} />
+          <Stack.Screen name="documents" options={{ headerShown: false }} />
           <Stack.Screen name="family-members" options={{ title: 'Family Members' }} />
           <Stack.Screen name="settings" options={{ title: 'Settings' }} />
         </Stack.Protected>
