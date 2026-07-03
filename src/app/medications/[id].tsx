@@ -17,6 +17,11 @@ import {
   MedicationStatus,
 } from '@/features/medications/types';
 import { useMedicationDetail } from '@/features/medications/useMedicationDetail';
+import {
+  cancelMedicationReminders,
+  scheduleMedicationReminders,
+  scheduleSnoozedMedication,
+} from '@/lib/notifications/local-notifications';
 import { colors, radius, spacing } from '@/theme';
 
 const actionPalette = {
@@ -52,6 +57,12 @@ export default function MedicationDetailScreen() {
     setActionSuccess(null);
     try {
       await logMedication(status, notes);
+      if (status === 'snoozed' && medication) {
+        await scheduleSnoozedMedication({
+          medicationId: medication.id,
+          medicationName: medication.name,
+        });
+      }
       setNotes('');
       setActionSuccess(`${medication?.name ?? 'Medication'} marked ${label.toLowerCase()}.`);
     } catch (caughtError) {
@@ -64,10 +75,22 @@ export default function MedicationDetailScreen() {
   };
 
   const toggleActive = async (value: boolean) => {
+    if (!medication) return;
+
     setIsUpdatingActive(true);
     setActionError(null);
     try {
       await setActive(value);
+      if (value) {
+        await scheduleMedicationReminders({
+          medicationId: medication.id,
+          medicationName: medication.name,
+          dosage: medication.dosage,
+          scheduledTimes: medication.scheduled_times,
+        });
+      } else {
+        await cancelMedicationReminders(medication.id);
+      }
     } catch (caughtError) {
       setActionError(
         caughtError instanceof Error ? caughtError.message : 'Unable to update medication.',

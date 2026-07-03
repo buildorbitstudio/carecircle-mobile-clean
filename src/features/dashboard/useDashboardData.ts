@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { supabase } from '@/lib/supabase';
+import { notifyUnansweredPings } from '@/lib/notifications/local-notifications';
 import { useAuth } from '@/providers/AuthProvider';
 import { useAppStore } from '@/store/app-store';
 
@@ -85,8 +86,13 @@ export function useDashboardData() {
       setError(null);
 
       try {
-        const { error: expiryError } = await supabase.rpc('refresh_unanswered_care_pings');
+        const { data: expiredCount, error: expiryError } = await supabase.rpc(
+          'refresh_unanswered_care_pings',
+        );
         if (expiryError) throw expiryError;
+        if (typeof expiredCount === 'number' && expiredCount > 0) {
+          await notifyUnansweredPings(expiredCount);
+        }
         const { error: overdueTasksError } = await supabase.rpc(
           'refresh_overdue_care_tasks',
         );

@@ -4,12 +4,14 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from '@/providers/AuthProvider';
+import { NotificationBootstrap } from '@/components/NotificationBootstrap';
 import { colors } from '@/theme';
 
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
+        <NotificationBootstrap />
         <RootNavigator />
       </AuthProvider>
     </SafeAreaProvider>

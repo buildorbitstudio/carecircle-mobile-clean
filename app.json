@@ -26,6 +26,13 @@
     "plugins": [
       "expo-router",
       [
+        "expo-notifications",
+        {
+          "color": "#376B67",
+          "defaultChannel": "carecircle"
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "backgroundColor": "#F7F7F2",
@@ -37,6 +44,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "200deca8-a9dd-4fff-9f90-f892866e060b"
+      }
+    },
+    "owner": "buildorbitstudio"
   }
 }

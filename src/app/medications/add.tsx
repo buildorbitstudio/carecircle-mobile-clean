@@ -7,6 +7,7 @@ import { Pressable, StyleSheet, Switch, View } from 'react-native';
 import { AppButton, AppText, FormField, Screen, SectionHeader } from '@/components/ui';
 import { useMedications } from '@/features/medications/useMedications';
 import { supabase } from '@/lib/supabase';
+import { scheduleMedicationReminders } from '@/lib/notifications/local-notifications';
 import { useAuth } from '@/providers/AuthProvider';
 import { colors, radius, spacing } from '@/theme';
 import {
@@ -72,6 +73,19 @@ export default function AddMedicationScreen() {
         .single();
 
       if (error) throw error;
+      void scheduleMedicationReminders({
+        medicationId: data.id,
+        medicationName: values.name.trim(),
+        dosage: values.dosage.trim(),
+        scheduledTimes: parseScheduledTimes(values.scheduledTimes),
+      }).catch((notificationError: unknown) => {
+        console.warn(
+          'Unable to schedule medication reminders:',
+          notificationError instanceof Error
+            ? notificationError.message
+            : notificationError,
+        );
+      });
       router.replace({ pathname: '/medications/[id]', params: { id: data.id } });
     } catch (caughtError) {
       setSubmitError(

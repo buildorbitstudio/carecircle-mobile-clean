@@ -3,6 +3,7 @@ import { createContext, PropsWithChildren, useContext, useEffect, useState } fro
 import { AppState, Platform } from 'react-native';
 
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { deactivateCurrentPushToken } from '@/lib/notifications/push-registration';
 
 type SignUpInput = {
   email: string;
@@ -160,6 +161,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
     },
     signOut: async () => {
       assertConfigured();
+      if (session?.user.id) {
+        try {
+          await deactivateCurrentPushToken(session.user.id);
+        } catch (error) {
+          console.warn(
+            'Unable to deactivate push token:',
+            error instanceof Error ? error.message : error,
+          );
+        }
+      }
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
     },

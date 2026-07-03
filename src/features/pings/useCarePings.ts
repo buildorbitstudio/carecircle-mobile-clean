@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { supabase } from '@/lib/supabase';
+import {
+  notifyNewCarePing,
+  notifyUnansweredPings,
+} from '@/lib/notifications/local-notifications';
 import { useAuth } from '@/providers/AuthProvider';
 import { useAppStore } from '@/store/app-store';
 import { PingType } from './ping-config';
@@ -43,8 +47,13 @@ export function useCarePings() {
       setError(null);
 
       try {
-        const { error: expiryError } = await supabase.rpc('refresh_unanswered_care_pings');
+        const { data: expiredCount, error: expiryError } = await supabase.rpc(
+          'refresh_unanswered_care_pings',
+        );
         if (expiryError) throw expiryError;
+        if (typeof expiredCount === 'number' && expiredCount > 0) {
+          await notifyUnansweredPings(expiredCount);
+        }
 
         const { data: membership, error: membershipError } = await supabase
           .from('family_members')
@@ -128,7 +137,7 @@ export function useCarePings() {
   const sendPing = async (pingType: PingType, message: string) => {
     if (!context) throw new Error('Care circle information is still loading.');
 
-    const { error: sendError } = await supabase.rpc('send_care_ping', {
+    const { data: sentPing, error: sendError } = await supabase.rpc('send_care_ping', {
       p_family_id: context.familyId,
       p_elder_profile_id: context.elderId,
       p_ping_type: pingType,
@@ -136,6 +145,15 @@ export function useCarePings() {
     });
 
     if (sendError) throw sendError;
+    const pingId =
+      sentPing && typeof sentPing === 'object' && 'id' in sentPing
+        ? String(sentPing.id)
+        : undefined;
+    await notifyNewCarePing({
+      elderName: context.elderName,
+      message: message.trim(),
+      pingId,
+    });
     await load(true);
   };
 

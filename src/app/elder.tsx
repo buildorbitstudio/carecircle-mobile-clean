@@ -11,6 +11,10 @@ import {
 } from '@/features/pings/ping-config';
 import { useCarePings } from '@/features/pings/useCarePings';
 import { supabase } from '@/lib/supabase';
+import {
+  notifyCarePingResponse,
+  notifyNeedHelp,
+} from '@/lib/notifications/local-notifications';
 import { colors, radius, spacing } from '@/theme';
 
 const responsePalette = {
@@ -49,6 +53,19 @@ export default function ElderModeScreen() {
 
     setConfirmation(response);
     setIsResponding(false);
+    if (response === 'Need Help') {
+      await notifyNeedHelp({
+        elderName: context?.elderName ?? 'Your loved one',
+        response,
+        pingId: activePing.id,
+      });
+    } else {
+      await notifyCarePingResponse({
+        elderName: context?.elderName ?? 'Your loved one',
+        response,
+        pingId: activePing.id,
+      });
+    }
     await refresh();
   };
 
