@@ -25,7 +25,7 @@ $$;
 -- Core identity and family tables
 -- ---------------------------------------------------------------------------
 
-create table public.users_profile (
+create table if not exists public.users_profile (
   id uuid primary key references auth.users(id) on delete cascade,
   full_name text not null check (char_length(trim(full_name)) between 1 and 120),
   email text not null check (char_length(trim(email)) between 3 and 320),
@@ -34,10 +34,10 @@ create table public.users_profile (
   updated_at timestamptz not null default now()
 );
 
-create unique index users_profile_email_lower_idx
+create unique index if not exists users_profile_email_lower_idx
   on public.users_profile (lower(email));
 
-create table public.families (
+create table if not exists public.families (
   id uuid primary key default gen_random_uuid(),
   name text not null check (char_length(trim(name)) between 1 and 120),
   created_by uuid not null references public.users_profile(id) on delete restrict,
@@ -45,9 +45,9 @@ create table public.families (
   updated_at timestamptz not null default now()
 );
 
-create index families_created_by_idx on public.families(created_by);
+create index if not exists families_created_by_idx on public.families(created_by);
 
-create table public.family_members (
+create table if not exists public.family_members (
   id uuid primary key default gen_random_uuid(),
   family_id uuid not null references public.families(id) on delete cascade,
   user_id uuid not null references public.users_profile(id) on delete cascade,
@@ -58,12 +58,12 @@ create table public.family_members (
   unique (family_id, user_id)
 );
 
-create index family_members_user_status_idx
+create index if not exists family_members_user_status_idx
   on public.family_members(user_id, status);
-create index family_members_family_status_idx
+create index if not exists family_members_family_status_idx
   on public.family_members(family_id, status);
 
-create table public.elder_profiles (
+create table if not exists public.elder_profiles (
   id uuid primary key default gen_random_uuid(),
   family_id uuid not null references public.families(id) on delete cascade,
   user_id uuid references public.users_profile(id) on delete set null,
@@ -80,8 +80,8 @@ create table public.elder_profiles (
   unique (family_id, user_id)
 );
 
-create index elder_profiles_family_idx on public.elder_profiles(family_id);
-create index elder_profiles_user_idx
+create index if not exists elder_profiles_family_idx on public.elder_profiles(family_id);
+create index if not exists elder_profiles_user_idx
   on public.elder_profiles(user_id)
   where user_id is not null;
 
@@ -89,7 +89,7 @@ create index elder_profiles_user_idx
 -- Emergency and health profile data
 -- ---------------------------------------------------------------------------
 
-create table public.emergency_contacts (
+create table if not exists public.emergency_contacts (
   id uuid primary key default gen_random_uuid(),
   elder_profile_id uuid not null references public.elder_profiles(id) on delete cascade,
   name text not null check (char_length(trim(name)) between 1 and 120),
@@ -101,10 +101,10 @@ create table public.emergency_contacts (
   updated_at timestamptz not null default now()
 );
 
-create index emergency_contacts_elder_priority_idx
+create index if not exists emergency_contacts_elder_priority_idx
   on public.emergency_contacts(elder_profile_id, priority);
 
-create table public.medical_conditions (
+create table if not exists public.medical_conditions (
   id uuid primary key default gen_random_uuid(),
   elder_profile_id uuid not null references public.elder_profiles(id) on delete cascade,
   condition_name text not null check (char_length(trim(condition_name)) between 1 and 160),
@@ -113,10 +113,10 @@ create table public.medical_conditions (
   updated_at timestamptz not null default now()
 );
 
-create index medical_conditions_elder_idx
+create index if not exists medical_conditions_elder_idx
   on public.medical_conditions(elder_profile_id);
 
-create table public.allergies (
+create table if not exists public.allergies (
   id uuid primary key default gen_random_uuid(),
   elder_profile_id uuid not null references public.elder_profiles(id) on delete cascade,
   allergy_name text not null check (char_length(trim(allergy_name)) between 1 and 160),
@@ -127,13 +127,13 @@ create table public.allergies (
   updated_at timestamptz not null default now()
 );
 
-create index allergies_elder_idx on public.allergies(elder_profile_id);
+create index if not exists allergies_elder_idx on public.allergies(elder_profile_id);
 
 -- ---------------------------------------------------------------------------
 -- Medications
 -- ---------------------------------------------------------------------------
 
-create table public.medications (
+create table if not exists public.medications (
   id uuid primary key default gen_random_uuid(),
   elder_profile_id uuid not null references public.elder_profiles(id) on delete cascade,
   name text not null check (char_length(trim(name)) between 1 and 160),
@@ -153,13 +153,13 @@ create table public.medications (
   unique (id, elder_profile_id)
 );
 
-create index medications_elder_active_idx
+create index if not exists medications_elder_active_idx
   on public.medications(elder_profile_id, active);
-create index medications_refill_date_idx
+create index if not exists medications_refill_date_idx
   on public.medications(refill_date)
   where active and refill_date is not null;
 
-create table public.medication_logs (
+create table if not exists public.medication_logs (
   id uuid primary key default gen_random_uuid(),
   medication_id uuid not null,
   elder_profile_id uuid not null,
@@ -177,16 +177,16 @@ create table public.medication_logs (
     on delete cascade
 );
 
-create index medication_logs_elder_logged_at_idx
+create index if not exists medication_logs_elder_logged_at_idx
   on public.medication_logs(elder_profile_id, logged_at desc);
-create index medication_logs_medication_logged_at_idx
+create index if not exists medication_logs_medication_logged_at_idx
   on public.medication_logs(medication_id, logged_at desc);
 
 -- ---------------------------------------------------------------------------
 -- Care coordination
 -- ---------------------------------------------------------------------------
 
-create table public.care_pings (
+create table if not exists public.care_pings (
   id uuid primary key default gen_random_uuid(),
   family_id uuid not null,
   elder_profile_id uuid not null,
@@ -217,15 +217,15 @@ create table public.care_pings (
     check (expires_at is null or expires_at >= created_at)
 );
 
-create index care_pings_family_created_at_idx
+create index if not exists care_pings_family_created_at_idx
   on public.care_pings(family_id, created_at desc);
-create index care_pings_elder_status_created_idx
+create index if not exists care_pings_elder_status_created_idx
   on public.care_pings(elder_profile_id, status, created_at desc);
-create index care_pings_pending_expiry_idx
+create index if not exists care_pings_pending_expiry_idx
   on public.care_pings(expires_at)
   where status = 'sent' and expires_at is not null;
 
-create table public.appointments (
+create table if not exists public.appointments (
   id uuid primary key default gen_random_uuid(),
   elder_profile_id uuid not null references public.elder_profiles(id) on delete cascade,
   title text not null check (char_length(trim(title)) between 1 and 200),
@@ -242,13 +242,13 @@ create table public.appointments (
   updated_at timestamptz not null default now()
 );
 
-create index appointments_elder_time_idx
+create index if not exists appointments_elder_time_idx
   on public.appointments(elder_profile_id, appointment_time);
-create index appointments_assigned_to_idx
+create index if not exists appointments_assigned_to_idx
   on public.appointments(assigned_to)
   where assigned_to is not null;
 
-create table public.care_tasks (
+create table if not exists public.care_tasks (
   id uuid primary key default gen_random_uuid(),
   family_id uuid not null,
   elder_profile_id uuid not null,
@@ -275,13 +275,13 @@ create table public.care_tasks (
     )
 );
 
-create index care_tasks_family_status_due_idx
+create index if not exists care_tasks_family_status_due_idx
   on public.care_tasks(family_id, status, due_date);
-create index care_tasks_assigned_status_idx
+create index if not exists care_tasks_assigned_status_idx
   on public.care_tasks(assigned_to, status)
   where assigned_to is not null;
 
-create table public.health_timeline_events (
+create table if not exists public.health_timeline_events (
   id uuid primary key default gen_random_uuid(),
   family_id uuid not null,
   elder_profile_id uuid not null,
@@ -305,15 +305,15 @@ create table public.health_timeline_events (
     )
 );
 
-create index timeline_elder_created_at_idx
+create index if not exists timeline_elder_created_at_idx
   on public.health_timeline_events(elder_profile_id, created_at desc);
-create index timeline_family_severity_created_idx
+create index if not exists timeline_family_severity_created_idx
   on public.health_timeline_events(family_id, severity, created_at desc);
-create index timeline_source_idx
+create index if not exists timeline_source_idx
   on public.health_timeline_events(source_table, source_id)
   where source_id is not null;
 
-create table public.documents (
+create table if not exists public.documents (
   id uuid primary key default gen_random_uuid(),
   family_id uuid not null,
   elder_profile_id uuid not null,
@@ -341,59 +341,71 @@ create table public.documents (
   unique (storage_path)
 );
 
-create index documents_elder_created_at_idx
+create index if not exists documents_elder_created_at_idx
   on public.documents(elder_profile_id, created_at desc);
-create index documents_family_type_idx
+create index if not exists documents_family_type_idx
   on public.documents(family_id, document_type);
 
 -- ---------------------------------------------------------------------------
 -- updated_at triggers
 -- ---------------------------------------------------------------------------
 
+drop trigger if exists users_profile_set_updated_at on public.users_profile;
 create trigger users_profile_set_updated_at
 before update on public.users_profile
 for each row execute function public.set_updated_at();
 
+drop trigger if exists families_set_updated_at on public.families;
 create trigger families_set_updated_at
 before update on public.families
 for each row execute function public.set_updated_at();
 
+drop trigger if exists family_members_set_updated_at on public.family_members;
 create trigger family_members_set_updated_at
 before update on public.family_members
 for each row execute function public.set_updated_at();
 
+drop trigger if exists elder_profiles_set_updated_at on public.elder_profiles;
 create trigger elder_profiles_set_updated_at
 before update on public.elder_profiles
 for each row execute function public.set_updated_at();
 
+drop trigger if exists emergency_contacts_set_updated_at on public.emergency_contacts;
 create trigger emergency_contacts_set_updated_at
 before update on public.emergency_contacts
 for each row execute function public.set_updated_at();
 
+drop trigger if exists medical_conditions_set_updated_at on public.medical_conditions;
 create trigger medical_conditions_set_updated_at
 before update on public.medical_conditions
 for each row execute function public.set_updated_at();
 
+drop trigger if exists allergies_set_updated_at on public.allergies;
 create trigger allergies_set_updated_at
 before update on public.allergies
 for each row execute function public.set_updated_at();
 
+drop trigger if exists medications_set_updated_at on public.medications;
 create trigger medications_set_updated_at
 before update on public.medications
 for each row execute function public.set_updated_at();
 
+drop trigger if exists care_pings_set_updated_at on public.care_pings;
 create trigger care_pings_set_updated_at
 before update on public.care_pings
 for each row execute function public.set_updated_at();
 
+drop trigger if exists appointments_set_updated_at on public.appointments;
 create trigger appointments_set_updated_at
 before update on public.appointments
 for each row execute function public.set_updated_at();
 
+drop trigger if exists care_tasks_set_updated_at on public.care_tasks;
 create trigger care_tasks_set_updated_at
 before update on public.care_tasks
 for each row execute function public.set_updated_at();
 
+drop trigger if exists documents_set_updated_at on public.documents;
 create trigger documents_set_updated_at
 before update on public.documents
 for each row execute function public.set_updated_at();
@@ -418,6 +430,7 @@ begin
 end;
 $$;
 
+drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
 after insert on auth.users
 for each row execute function public.handle_new_auth_user();
@@ -525,6 +538,7 @@ alter table public.documents enable row level security;
 grant select, insert, update, delete on all tables in schema public to authenticated;
 
 -- Profiles
+drop policy if exists "profiles_select_self_or_family" on public.users_profile;
 create policy "profiles_select_self_or_family"
 on public.users_profile for select to authenticated
 using (
@@ -532,16 +546,19 @@ using (
   or private.shares_family_with(id)
 );
 
+drop policy if exists "profiles_insert_self" on public.users_profile;
 create policy "profiles_insert_self"
 on public.users_profile for insert to authenticated
 with check (id = (select auth.uid()));
 
+drop policy if exists "profiles_update_self" on public.users_profile;
 create policy "profiles_update_self"
 on public.users_profile for update to authenticated
 using (id = (select auth.uid()))
 with check (id = (select auth.uid()));
 
 -- Families
+drop policy if exists "families_select_members_or_creator" on public.families;
 create policy "families_select_members_or_creator"
 on public.families for select to authenticated
 using (
@@ -549,24 +566,29 @@ using (
   or created_by = (select auth.uid())
 );
 
+drop policy if exists "families_insert_creator" on public.families;
 create policy "families_insert_creator"
 on public.families for insert to authenticated
 with check (created_by = (select auth.uid()));
 
+drop policy if exists "families_update_admins" on public.families;
 create policy "families_update_admins"
 on public.families for update to authenticated
 using (private.is_family_admin(id))
 with check (private.is_family_admin(id));
 
+drop policy if exists "families_delete_admins" on public.families;
 create policy "families_delete_admins"
 on public.families for delete to authenticated
 using (private.is_family_admin(id));
 
 -- Memberships
+drop policy if exists "family_members_select_members" on public.family_members;
 create policy "family_members_select_members"
 on public.family_members for select to authenticated
 using (private.is_family_member(family_id));
 
+drop policy if exists "family_members_insert_admin_or_bootstrap" on public.family_members;
 create policy "family_members_insert_admin_or_bootstrap"
 on public.family_members for insert to authenticated
 with check (
@@ -584,20 +606,24 @@ with check (
   )
 );
 
+drop policy if exists "family_members_update_admins" on public.family_members;
 create policy "family_members_update_admins"
 on public.family_members for update to authenticated
 using (private.is_family_admin(family_id))
 with check (private.is_family_admin(family_id));
 
+drop policy if exists "family_members_delete_admins" on public.family_members;
 create policy "family_members_delete_admins"
 on public.family_members for delete to authenticated
 using (private.is_family_admin(family_id));
 
 -- Elder profiles
+drop policy if exists "elder_profiles_select_members" on public.elder_profiles;
 create policy "elder_profiles_select_members"
 on public.elder_profiles for select to authenticated
 using (private.is_family_member(family_id));
 
+drop policy if exists "elder_profiles_insert_members" on public.elder_profiles;
 create policy "elder_profiles_insert_members"
 on public.elder_profiles for insert to authenticated
 with check (
@@ -605,74 +631,90 @@ with check (
   and created_by = (select auth.uid())
 );
 
+drop policy if exists "elder_profiles_update_members" on public.elder_profiles;
 create policy "elder_profiles_update_members"
 on public.elder_profiles for update to authenticated
 using (private.is_family_member(family_id))
 with check (private.is_family_member(family_id));
 
+drop policy if exists "elder_profiles_delete_admins" on public.elder_profiles;
 create policy "elder_profiles_delete_admins"
 on public.elder_profiles for delete to authenticated
 using (private.is_family_admin(family_id));
 
 -- Emergency contacts
+drop policy if exists "emergency_contacts_select_members" on public.emergency_contacts;
 create policy "emergency_contacts_select_members"
 on public.emergency_contacts for select to authenticated
 using (private.can_access_elder(elder_profile_id));
 
+drop policy if exists "emergency_contacts_insert_members" on public.emergency_contacts;
 create policy "emergency_contacts_insert_members"
 on public.emergency_contacts for insert to authenticated
 with check (private.can_access_elder(elder_profile_id));
 
+drop policy if exists "emergency_contacts_update_members" on public.emergency_contacts;
 create policy "emergency_contacts_update_members"
 on public.emergency_contacts for update to authenticated
 using (private.can_access_elder(elder_profile_id))
 with check (private.can_access_elder(elder_profile_id));
 
+drop policy if exists "emergency_contacts_delete_members" on public.emergency_contacts;
 create policy "emergency_contacts_delete_members"
 on public.emergency_contacts for delete to authenticated
 using (private.can_access_elder(elder_profile_id));
 
 -- Medical conditions
+drop policy if exists "medical_conditions_select_members" on public.medical_conditions;
 create policy "medical_conditions_select_members"
 on public.medical_conditions for select to authenticated
 using (private.can_access_elder(elder_profile_id));
 
+drop policy if exists "medical_conditions_insert_members" on public.medical_conditions;
 create policy "medical_conditions_insert_members"
 on public.medical_conditions for insert to authenticated
 with check (private.can_access_elder(elder_profile_id));
 
+drop policy if exists "medical_conditions_update_members" on public.medical_conditions;
 create policy "medical_conditions_update_members"
 on public.medical_conditions for update to authenticated
 using (private.can_access_elder(elder_profile_id))
 with check (private.can_access_elder(elder_profile_id));
 
+drop policy if exists "medical_conditions_delete_members" on public.medical_conditions;
 create policy "medical_conditions_delete_members"
 on public.medical_conditions for delete to authenticated
 using (private.can_access_elder(elder_profile_id));
 
 -- Allergies
+drop policy if exists "allergies_select_members" on public.allergies;
 create policy "allergies_select_members"
 on public.allergies for select to authenticated
 using (private.can_access_elder(elder_profile_id));
 
+drop policy if exists "allergies_insert_members" on public.allergies;
 create policy "allergies_insert_members"
 on public.allergies for insert to authenticated
 with check (private.can_access_elder(elder_profile_id));
 
+drop policy if exists "allergies_update_members" on public.allergies;
 create policy "allergies_update_members"
 on public.allergies for update to authenticated
 using (private.can_access_elder(elder_profile_id))
 with check (private.can_access_elder(elder_profile_id));
 
+drop policy if exists "allergies_delete_members" on public.allergies;
 create policy "allergies_delete_members"
 on public.allergies for delete to authenticated
 using (private.can_access_elder(elder_profile_id));
 
 -- Medications
+drop policy if exists "medications_select_members" on public.medications;
 create policy "medications_select_members"
 on public.medications for select to authenticated
 using (private.can_access_elder(elder_profile_id));
 
+drop policy if exists "medications_insert_members" on public.medications;
 create policy "medications_insert_members"
 on public.medications for insert to authenticated
 with check (
@@ -680,20 +722,24 @@ with check (
   and created_by = (select auth.uid())
 );
 
+drop policy if exists "medications_update_members" on public.medications;
 create policy "medications_update_members"
 on public.medications for update to authenticated
 using (private.can_access_elder(elder_profile_id))
 with check (private.can_access_elder(elder_profile_id));
 
+drop policy if exists "medications_delete_members" on public.medications;
 create policy "medications_delete_members"
 on public.medications for delete to authenticated
 using (private.can_access_elder(elder_profile_id));
 
 -- Medication logs
+drop policy if exists "medication_logs_select_members" on public.medication_logs;
 create policy "medication_logs_select_members"
 on public.medication_logs for select to authenticated
 using (private.can_access_elder(elder_profile_id));
 
+drop policy if exists "medication_logs_insert_members" on public.medication_logs;
 create policy "medication_logs_insert_members"
 on public.medication_logs for insert to authenticated
 with check (
@@ -701,11 +747,13 @@ with check (
   and (logged_by is null or logged_by = (select auth.uid()))
 );
 
+drop policy if exists "medication_logs_update_members" on public.medication_logs;
 create policy "medication_logs_update_members"
 on public.medication_logs for update to authenticated
 using (private.can_access_elder(elder_profile_id))
 with check (private.can_access_elder(elder_profile_id));
 
+drop policy if exists "medication_logs_delete_admins" on public.medication_logs;
 create policy "medication_logs_delete_admins"
 on public.medication_logs for delete to authenticated
 using (
@@ -718,10 +766,12 @@ using (
 );
 
 -- Care Pings
+drop policy if exists "care_pings_select_members" on public.care_pings;
 create policy "care_pings_select_members"
 on public.care_pings for select to authenticated
 using (private.is_family_member(family_id));
 
+drop policy if exists "care_pings_insert_members" on public.care_pings;
 create policy "care_pings_insert_members"
 on public.care_pings for insert to authenticated
 with check (
@@ -729,20 +779,24 @@ with check (
   and sender_id = (select auth.uid())
 );
 
+drop policy if exists "care_pings_update_members" on public.care_pings;
 create policy "care_pings_update_members"
 on public.care_pings for update to authenticated
 using (private.is_family_member(family_id))
 with check (private.is_family_member(family_id));
 
+drop policy if exists "care_pings_delete_admins" on public.care_pings;
 create policy "care_pings_delete_admins"
 on public.care_pings for delete to authenticated
 using (private.is_family_admin(family_id));
 
 -- Appointments
+drop policy if exists "appointments_select_members" on public.appointments;
 create policy "appointments_select_members"
 on public.appointments for select to authenticated
 using (private.can_access_elder(elder_profile_id));
 
+drop policy if exists "appointments_insert_members" on public.appointments;
 create policy "appointments_insert_members"
 on public.appointments for insert to authenticated
 with check (
@@ -750,20 +804,24 @@ with check (
   and created_by = (select auth.uid())
 );
 
+drop policy if exists "appointments_update_members" on public.appointments;
 create policy "appointments_update_members"
 on public.appointments for update to authenticated
 using (private.can_access_elder(elder_profile_id))
 with check (private.can_access_elder(elder_profile_id));
 
+drop policy if exists "appointments_delete_members" on public.appointments;
 create policy "appointments_delete_members"
 on public.appointments for delete to authenticated
 using (private.can_access_elder(elder_profile_id));
 
 -- Care tasks
+drop policy if exists "care_tasks_select_members" on public.care_tasks;
 create policy "care_tasks_select_members"
 on public.care_tasks for select to authenticated
 using (private.is_family_member(family_id));
 
+drop policy if exists "care_tasks_insert_members" on public.care_tasks;
 create policy "care_tasks_insert_members"
 on public.care_tasks for insert to authenticated
 with check (
@@ -771,20 +829,24 @@ with check (
   and created_by = (select auth.uid())
 );
 
+drop policy if exists "care_tasks_update_members" on public.care_tasks;
 create policy "care_tasks_update_members"
 on public.care_tasks for update to authenticated
 using (private.is_family_member(family_id))
 with check (private.is_family_member(family_id));
 
+drop policy if exists "care_tasks_delete_members" on public.care_tasks;
 create policy "care_tasks_delete_members"
 on public.care_tasks for delete to authenticated
 using (private.is_family_member(family_id));
 
 -- Timeline
+drop policy if exists "timeline_select_members" on public.health_timeline_events;
 create policy "timeline_select_members"
 on public.health_timeline_events for select to authenticated
 using (private.is_family_member(family_id));
 
+drop policy if exists "timeline_insert_members" on public.health_timeline_events;
 create policy "timeline_insert_members"
 on public.health_timeline_events for insert to authenticated
 with check (
@@ -792,20 +854,24 @@ with check (
   and (created_by is null or created_by = (select auth.uid()))
 );
 
+drop policy if exists "timeline_update_admins" on public.health_timeline_events;
 create policy "timeline_update_admins"
 on public.health_timeline_events for update to authenticated
 using (private.is_family_admin(family_id))
 with check (private.is_family_admin(family_id));
 
+drop policy if exists "timeline_delete_admins" on public.health_timeline_events;
 create policy "timeline_delete_admins"
 on public.health_timeline_events for delete to authenticated
 using (private.is_family_admin(family_id));
 
 -- Document metadata. Storage object policies are intentionally separate.
+drop policy if exists "documents_select_members" on public.documents;
 create policy "documents_select_members"
 on public.documents for select to authenticated
 using (private.is_family_member(family_id));
 
+drop policy if exists "documents_insert_members" on public.documents;
 create policy "documents_insert_members"
 on public.documents for insert to authenticated
 with check (
@@ -813,6 +879,7 @@ with check (
   and uploaded_by = (select auth.uid())
 );
 
+drop policy if exists "documents_update_uploader_or_admin" on public.documents;
 create policy "documents_update_uploader_or_admin"
 on public.documents for update to authenticated
 using (
@@ -821,6 +888,7 @@ using (
 )
 with check (private.is_family_member(family_id));
 
+drop policy if exists "documents_delete_uploader_or_admin" on public.documents;
 create policy "documents_delete_uploader_or_admin"
 on public.documents for delete to authenticated
 using (
