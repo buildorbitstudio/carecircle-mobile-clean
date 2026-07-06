@@ -79,6 +79,8 @@ export default function DashboardScreen() {
         </View>
       ) : null}
 
+      <Pressable accessibilityRole="button" accessibilityLabel={`Open ${data.elder.full_name} profile`}
+        onPress={() => router.push('/elder-profile' as never)}>
       <AppCard style={styles.elderCard}>
         {data.elder.photo_url ? (
           <Image
@@ -100,8 +102,9 @@ export default function DashboardScreen() {
               : ''}
           </AppText>
         </View>
-        <View style={styles.activeDot} />
+        <Ionicons color={colors.primary} name="chevron-forward" size={22} />
       </AppCard>
+      </Pressable>
 
       <AppButton
         label="Send a Care Ping"

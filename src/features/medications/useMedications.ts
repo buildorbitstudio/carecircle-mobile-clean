@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
@@ -121,9 +122,24 @@ export function useMedications() {
   useEffect(() => {
     if (!context?.elderId) return;
 
-    const medicationsChannel = supabase
-      .channel(`medications-${context.elderId}`)
-      .on(
+    let active = true;
+    let medicationsChannel: RealtimeChannel | null = null;
+
+    try {
+      // Each effect execution owns a uniquely named channel. This prevents a
+      // mounted list screen and a pushed add/detail screen (and React Strict
+      // Mode's effect replay) from receiving the same subscribed instance.
+      const channelName = [
+        'medications',
+        context.elderId,
+        Date.now(),
+        Math.random().toString(36).slice(2),
+      ].join('-');
+      const channel = supabase.channel(channelName);
+
+      // Register every callback before subscribing. Supabase rejects `.on()`
+      // calls made after a channel has entered the subscribed state.
+      channel.on(
         'postgres_changes',
         {
           event: '*',
@@ -131,9 +147,11 @@ export function useMedications() {
           table: 'medications',
           filter: `elder_profile_id=eq.${context.elderId}`,
         },
-        () => void load(true),
-      )
-      .on(
+        () => {
+          if (active) void load(true);
+        },
+      );
+      channel.on(
         'postgres_changes',
         {
           event: 'INSERT',
@@ -141,12 +159,35 @@ export function useMedications() {
           table: 'medication_logs',
           filter: `elder_profile_id=eq.${context.elderId}`,
         },
-        () => void load(true),
-      )
-      .subscribe();
+        () => {
+          if (active) void load(true);
+        },
+      );
+
+      medicationsChannel = channel;
+      channel.subscribe((status, channelError) => {
+        if (!active) return;
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('Medication realtime subscription failed:', channelError);
+          setError(
+            'Live medication updates are temporarily unavailable. Pull to refresh to try again.',
+          );
+        }
+      });
+    } catch (subscriptionError) {
+      console.warn('Unable to start medication realtime updates:', subscriptionError);
+      setError(
+        'Live medication updates are temporarily unavailable. Pull to refresh to try again.',
+      );
+    }
 
     return () => {
-      void supabase.removeChannel(medicationsChannel);
+      active = false;
+      if (medicationsChannel) {
+        void supabase.removeChannel(medicationsChannel).catch((cleanupError: unknown) => {
+          console.warn('Unable to clean up medication realtime updates:', cleanupError);
+        });
+      }
     };
   }, [context?.elderId, load]);
 

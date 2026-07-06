@@ -1,4 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
+import { router } from 'expo-router';
 import { createContext, PropsWithChildren, useContext, useEffect, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 
@@ -171,8 +172,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
           );
         }
       }
-      const { error } = await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
       if (error) throw error;
+      setSession(null);
+      setOnboardingComplete(false);
+      setIsCheckingOnboarding(false);
+      setTimeout(() => router.replace('/login'), 0);
     },
   };
 

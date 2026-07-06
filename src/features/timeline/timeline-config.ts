@@ -40,7 +40,13 @@ export const timelineTypeFilters: {
     value: 'appointments',
     label: 'Appointments',
     icon: 'calendar',
-    eventTypes: ['appointment_update', 'appointment_created', 'appointment_completed'],
+    eventTypes: [
+      'appointment_update',
+      'appointment_created',
+      'appointment_completed',
+      'appointment_cancelled',
+      'appointment_deleted',
+    ],
   },
   {
     value: 'emergency',

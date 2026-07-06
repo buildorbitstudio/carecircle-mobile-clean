@@ -1,3 +1,4 @@
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { useCallback, useEffect, useState } from 'react';
 
 import { supabase } from '@/lib/supabase';
@@ -130,9 +131,23 @@ export function useCareTasks() {
   useEffect(() => {
     if (!context?.elderId) return;
 
-    const channel = supabase
-      .channel(`care-tasks-${context.elderId}`)
-      .on(
+    let active = true;
+    let tasksChannel: RealtimeChannel | null = null;
+
+    try {
+      // A unique name guarantees that a mounted list and a pushed add screen,
+      // as well as React Strict Mode's effect replay, never share an already
+      // subscribed Supabase channel instance.
+      const channelName = [
+        'care-tasks',
+        context.elderId,
+        Date.now(),
+        Math.random().toString(36).slice(2),
+      ].join('-');
+      const channel = supabase.channel(channelName);
+
+      // All database callbacks must be attached before subscribe is called.
+      channel.on(
         'postgres_changes',
         {
           event: '*',
@@ -140,12 +155,35 @@ export function useCareTasks() {
           table: 'care_tasks',
           filter: `elder_profile_id=eq.${context.elderId}`,
         },
-        () => void load(true),
-      )
-      .subscribe();
+        () => {
+          if (active) void load(true);
+        },
+      );
+
+      tasksChannel = channel;
+      channel.subscribe((status, channelError) => {
+        if (!active) return;
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('Task realtime subscription failed:', channelError);
+          setError(
+            'Live task updates are temporarily unavailable. Pull to refresh to try again.',
+          );
+        }
+      });
+    } catch (subscriptionError) {
+      console.warn('Unable to start task realtime updates:', subscriptionError);
+      setError(
+        'Live task updates are temporarily unavailable. Pull to refresh to try again.',
+      );
+    }
 
     return () => {
-      void supabase.removeChannel(channel);
+      active = false;
+      if (tasksChannel) {
+        void supabase.removeChannel(tasksChannel).catch((cleanupError: unknown) => {
+          console.warn('Unable to clean up task realtime updates:', cleanupError);
+        });
+      }
     };
   }, [context?.elderId, load]);
 

@@ -1,6 +1,7 @@
 export * from './AppButton';
 export * from './AppCard';
 export * from './AppText';
+export * from './ConfirmationModal';
 export * from './EmptyState';
 export * from './FeedbackBanner';
 export * from './FeatureRow';

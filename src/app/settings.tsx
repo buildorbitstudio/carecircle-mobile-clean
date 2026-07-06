@@ -1,36 +1,48 @@
 import { useState } from 'react';
-import { Alert, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { AppButton, AppCard, AppText, FeatureRow, Screen, SectionHeader } from '@/components/ui';
+import {
+  AppButton,
+  AppCard,
+  ConfirmationModal,
+  FeatureRow,
+  Screen,
+  SectionHeader,
+} from '@/components/ui';
 import { useAuth } from '@/providers/AuthProvider';
-import { colors, spacing } from '@/theme';
+import { colors } from '@/theme';
 
 export default function SettingsScreen() {
   const { session, signOut } = useAuth();
+  const [showSignOut, setShowSignOut] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
 
-  const confirmSignOut = () => {
-    Alert.alert('Sign out?', 'You’ll need to sign in again to access your family circle.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign out',
-        style: 'destructive',
-        onPress: async () => {
-          setIsSigningOut(true);
-          setSignOutError(null);
+  const openSignOut = () => {
+    setSignOutError(null);
+    setShowSignOut(true);
+  };
 
-          try {
-            await signOut();
-          } catch (error) {
-            setSignOutError(
-              error instanceof Error ? error.message : 'Unable to sign out. Please try again.',
-            );
-            setIsSigningOut(false);
-          }
-        },
-      },
-    ]);
+  const cancelSignOut = () => {
+    if (isSigningOut) return;
+    setShowSignOut(false);
+    setSignOutError(null);
+  };
+
+  const confirmSignOut = async () => {
+    setIsSigningOut(true);
+    setSignOutError(null);
+
+    try {
+      await signOut();
+      setShowSignOut(false);
+    } catch (error) {
+      setSignOutError(
+        error instanceof Error ? error.message : 'Unable to sign out. Please try again.',
+      );
+    } finally {
+      setIsSigningOut(false);
+    }
   };
 
   return (
@@ -49,18 +61,17 @@ export default function SettingsScreen() {
         <View style={styles.divider} />
         <FeatureRow icon="shield-checkmark" title="Privacy and security" />
       </AppCard>
-      {signOutError ? (
-        <View accessibilityRole="alert" style={styles.error}>
-          <AppText color="danger" variant="caption">
-            {signOutError}
-          </AppText>
-        </View>
-      ) : null}
-      <AppButton
-        label="Sign out"
+      <AppButton label="Sign out" onPress={openSignOut} variant="ghost" />
+      <ConfirmationModal
+        confirmLabel="Sign Out"
+        description="You’ll need to sign in again to access your family circle."
+        destructive
+        error={signOutError}
         loading={isSigningOut}
-        onPress={confirmSignOut}
-        variant="ghost"
+        onCancel={cancelSignOut}
+        onConfirm={() => void confirmSignOut()}
+        title="Sign out?"
+        visible={showSignOut}
       />
     </Screen>
   );
@@ -68,9 +79,4 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   divider: { backgroundColor: colors.border, height: StyleSheet.hairlineWidth },
-  error: {
-    backgroundColor: colors.dangerSoft,
-    borderRadius: 12,
-    padding: spacing.md,
-  },
 });

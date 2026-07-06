@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { colors, radius, spacing } from '@/theme';
 import { AppText } from './AppText';
@@ -8,9 +8,17 @@ type EmptyStateProps = {
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
   description: string;
+  actionLabel?: string;
+  onAction?: () => void;
 };
 
-export function EmptyState({ icon, title, description }: EmptyStateProps) {
+export function EmptyState({
+  actionLabel,
+  description,
+  icon,
+  onAction,
+  title,
+}: EmptyStateProps) {
   return (
     <View style={styles.wrapper}>
       <View style={styles.icon}>
@@ -22,6 +30,13 @@ export function EmptyState({ icon, title, description }: EmptyStateProps) {
           {description}
         </AppText>
       </View>
+      {actionLabel && onAction ? (
+        <Pressable accessibilityRole="button" onPress={onAction} style={styles.action}>
+          <AppText color="primary" variant="label">
+            {actionLabel}
+          </AppText>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -37,4 +52,5 @@ const styles = StyleSheet.create({
     width: 44,
   },
   copy: { flex: 1, gap: 2 },
+  action: { justifyContent: 'center', minHeight: 48, paddingHorizontal: spacing.sm },
 });

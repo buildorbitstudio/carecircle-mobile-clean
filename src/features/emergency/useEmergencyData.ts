@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
@@ -18,6 +19,9 @@ export type EmergencyData = {
     id: string;
     full_name: string;
     date_of_birth: string | null;
+    relationship: string | null;
+    phone: string | null;
+    address: string | null;
     photo_url: string | null;
     primary_doctor: string | null;
     pharmacy: string | null;
@@ -78,7 +82,7 @@ export function useEmergencyData() {
         const { data: elders, error: elderError } = await supabase
           .from('elder_profiles')
           .select(
-            'id, full_name, date_of_birth, photo_url, primary_doctor, pharmacy, notes',
+            'id, full_name, date_of_birth, relationship, phone, address, photo_url, primary_doctor, pharmacy, notes',
           )
           .eq('family_id', membership.family_id)
           .order('created_at', { ascending: true });
@@ -144,10 +148,11 @@ export function useEmergencyData() {
     [activeElderId, session, setActiveElder],
   );
 
-  useEffect(() => {
-    const timer = setTimeout(() => void load(), 0);
-    return () => clearTimeout(timer);
-  }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
 
   return {
     data,

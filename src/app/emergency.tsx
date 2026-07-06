@@ -90,6 +90,21 @@ export default function EmergencyScreen() {
               Age: {calculateAge(data.elder.date_of_birth)}
             </AppText>
           ) : null}
+          {data.elder.relationship ? (
+            <AppText color="inkMuted" style={styles.identityText}>
+              Relationship: {data.elder.relationship}
+            </AppText>
+          ) : null}
+          {data.elder.phone ? (
+            <AppText color="inkMuted" style={styles.identityText}>
+              Phone: {data.elder.phone}
+            </AppText>
+          ) : null}
+          {data.elder.address ? (
+            <AppText color="inkMuted" style={styles.identityText}>
+              Address: {data.elder.address}
+            </AppText>
+          ) : null}
         </View>
       </AppCard>
 
