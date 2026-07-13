@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, View } from 'react-native';
 
 import {
@@ -10,15 +11,19 @@ import {
   Screen,
 } from '@/components/ui';
 import {
+  DashboardFamilyMember,
   DashboardMedication,
   DashboardPing,
   DashboardTask,
   useDashboardData,
 } from '@/features/dashboard/useDashboardData';
+import { ensurePersonalCareProfile } from '@/features/care-context/resolveCareContext';
+import { AccountMode, useAppStore } from '@/store/app-store';
 import { colors, radius, spacing } from '@/theme';
 
 export default function DashboardScreen() {
   const { data, error, isLoading, isRefreshing, refresh, retry } = useDashboardData();
+  const { accountMode, setAccountMode } = useAppStore();
 
   if (isLoading && !data) {
     return (
@@ -56,7 +61,10 @@ export default function DashboardScreen() {
             {greeting()}, {firstName(data.userName)}
           </AppText>
           <AppText numberOfLines={2} variant="h1">
-            {data.elder.full_name}’s care today
+            {data.isPersonal ? 'Your care today' : `${data.elder.full_name}'s care today`}
+          </AppText>
+          <AppText color="primary" variant="caption">
+            Currently viewing: {data.isPersonal ? 'Individual account' : 'Family account'}
           </AppText>
         </View>
         <Pressable
@@ -78,6 +86,18 @@ export default function DashboardScreen() {
           </AppText>
         </View>
       ) : null}
+
+      <AccountModeSwitcher
+        currentMode={accountMode}
+        familyName={data.familyName}
+        isPersonal={data.isPersonal}
+        onChange={async (mode) => {
+          if (mode === 'individual') {
+            await ensurePersonalCareProfile();
+          }
+          setAccountMode(mode);
+        }}
+      />
 
       <Pressable accessibilityRole="button" accessibilityLabel={`Open ${data.elder.full_name} profile`}
         onPress={() => router.push('/elder-profile' as never)}>
@@ -105,6 +125,45 @@ export default function DashboardScreen() {
         <Ionicons color={colors.primary} name="chevron-forward" size={22} />
       </AppCard>
       </Pressable>
+
+      <DashboardSection
+        actionLabel="View all"
+        onAction={() => router.push('/family-members')}
+        title={`Family circle (${data.familyMembers.length})`}>
+        {data.familyMembers.length ? (
+          <>
+            <View style={styles.familySummary}>
+              <FamilyCount
+                count={data.familyMembers.filter((member) => member.role === 'admin').length}
+                icon="shield-checkmark"
+                label="Admins"
+              />
+              <FamilyCount
+                count={data.familyMembers.filter((member) => member.role === 'member').length}
+                icon="people"
+                label="Members"
+              />
+              <FamilyCount
+                count={data.familyMembers.filter((member) => member.role === 'elder').length}
+                icon="heart"
+                label="Elders"
+              />
+            </View>
+            {data.familyMembers.slice(0, 5).map((member, index) => (
+              <View key={member.id}>
+                {index > 0 ? <View style={styles.divider} /> : null}
+                <FamilyMemberRow member={member} />
+              </View>
+            ))}
+          </>
+        ) : (
+          <EmptyState
+            description="Invite trusted people so everyone can coordinate care together."
+            icon="people-outline"
+            title="No family members yet"
+          />
+        )}
+      </DashboardSection>
 
       <AppButton
         label="Send a Care Ping"
@@ -234,6 +293,130 @@ export default function DashboardScreen() {
         </AppCard>
       </Pressable>
     </Screen>
+  );
+}
+
+function AccountModeSwitcher({
+  currentMode,
+  familyName,
+  isPersonal,
+  onChange,
+}: {
+  currentMode: AccountMode;
+  familyName: string;
+  isPersonal: boolean;
+  onChange: (mode: AccountMode) => Promise<void>;
+}) {
+  const [isSwitching, setIsSwitching] = useState(false);
+  const effectiveMode: AccountMode = isPersonal ? 'individual' : currentMode;
+
+  const switchMode = async (mode: AccountMode) => {
+    if (mode === effectiveMode || isSwitching) return;
+    setIsSwitching(true);
+    try {
+      await onChange(mode);
+    } finally {
+      setIsSwitching(false);
+    }
+  };
+
+  return (
+    <AppCard style={styles.modeCard}>
+      <View style={styles.modeCopy}>
+        <AppText variant="h3">Account view</AppText>
+        <AppText color="inkMuted" variant="caption">
+          Switch between your private personal care space and shared family care.
+        </AppText>
+        <AppText color="primary" variant="caption">
+          Active: {isPersonal ? 'Individual profile' : familyName}
+        </AppText>
+      </View>
+      <View style={styles.modeToggle}>
+        {(['family', 'individual'] as const).map((mode) => {
+          const selected = effectiveMode === mode;
+          return (
+            <Pressable
+              accessibilityLabel={`Switch to ${mode === 'family' ? 'Family' : 'Individual'} account`}
+              accessibilityRole="button"
+              accessibilityState={{ busy: isSwitching, selected }}
+              disabled={isSwitching}
+              key={mode}
+              onPress={() => void switchMode(mode)}
+              testID={`account-mode-${mode}`}
+              style={[styles.modeOption, selected && styles.modeSelected]}>
+              <Ionicons
+                color={selected ? colors.white : colors.primary}
+                name={mode === 'family' ? 'people' : 'person-circle'}
+                size={17}
+              />
+              <AppText
+                style={{ color: selected ? colors.white : colors.primary }}
+                variant="caption">
+                {mode === 'family' ? 'Family' : 'Individual'}
+              </AppText>
+            </Pressable>
+          );
+        })}
+      </View>
+    </AppCard>
+  );
+}
+
+function FamilyCount({
+  count,
+  icon,
+  label,
+}: {
+  count: number;
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+}) {
+  return (
+    <View style={styles.familyCountCard}>
+      <Ionicons color={colors.primary} name={icon} size={18} />
+      <AppText color="primary" variant="bodyStrong">
+        {count}
+      </AppText>
+      <AppText align="center" color="inkMuted" variant="caption">
+        {label}
+      </AppText>
+    </View>
+  );
+}
+
+function FamilyMemberRow({ member }: { member: DashboardFamilyMember }) {
+  const role = member.role === 'admin' ? 'Admin' : member.role === 'elder' ? 'Elder' : 'Family Member';
+  const icon =
+    member.role === 'admin' ? 'shield-checkmark' : member.role === 'elder' ? 'heart' : 'people';
+  return (
+    <View style={styles.detailRow}>
+      <View style={styles.familyAvatar}>
+        <AppText color="primary" variant="bodyStrong">
+          {initials(member.fullName)}
+        </AppText>
+      </View>
+      <View style={styles.grow}>
+        <View style={styles.memberNameRow}>
+          <AppText variant="bodyStrong">{member.fullName}</AppText>
+          {member.isCurrentUser ? (
+            <View style={styles.youBadge}>
+              <AppText color="primary" variant="caption">
+                You
+              </AppText>
+            </View>
+          ) : null}
+        </View>
+        <AppText color="inkMuted" numberOfLines={1} variant="caption">
+          {member.email || role}
+        </AppText>
+      </View>
+      <View style={styles.rolePill}>
+        <Ionicons color={colors.primary} name={icon} size={14} />
+        <AppText color="primary" variant="caption">
+          {role}
+        </AppText>
+      </View>
+    </View>
   );
 }
 
@@ -522,6 +705,39 @@ const styles = StyleSheet.create({
     width: 10,
   },
   grow: { flex: 1, gap: 2 },
+  familySummary: { flexDirection: 'row', gap: spacing.sm },
+  familyCountCard: {
+    alignItems: 'center',
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.md,
+    flex: 1,
+    gap: 2,
+    padding: spacing.sm,
+  },
+  familyAvatar: {
+    alignItems: 'center',
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.pill,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
+  memberNameRow: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+  youBadge: {
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+  },
+  rolePill: {
+    alignItems: 'center',
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.pill,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
   section: { gap: spacing.md },
   sectionHeader: {
     alignItems: 'center',
@@ -596,4 +812,25 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.md,
   },
+  modeCard: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  modeCopy: { flex: 1, gap: spacing.xs },
+  modeToggle: {
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.pill,
+    flexDirection: 'row',
+    padding: spacing.xs,
+  },
+  modeOption: {
+    alignItems: 'center',
+    borderRadius: radius.pill,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    minHeight: 40,
+    paddingHorizontal: spacing.sm,
+  },
+  modeSelected: { backgroundColor: colors.primary },
 });

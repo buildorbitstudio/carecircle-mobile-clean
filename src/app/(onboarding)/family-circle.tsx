@@ -20,7 +20,7 @@ export default function FamilyCircleScreen() {
 
   const submit = ({ familyName }: FamilyValues) => {
     updateOnboarding({ familyName: familyName.trim() });
-    router.push('/elder-profile');
+    router.push('/care-recipient');
   };
 
   return (

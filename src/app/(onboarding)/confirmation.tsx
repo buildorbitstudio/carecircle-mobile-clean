@@ -8,11 +8,20 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
 import { useAppStore } from '@/store/app-store';
 import { colors, radius, spacing } from '@/theme';
-import { elderSchema, familySchema, fullNameSchema } from '@/validation/onboarding';
+import {
+  elderSchema,
+  ElderValues,
+  familySchema,
+  FamilyValues,
+  fullNameSchema,
+  personalProfileSchema,
+  PersonalProfileValues,
+} from '@/validation/onboarding';
 
 type OnboardingResult = {
   family_id: string;
   elder_profile_id: string;
+  role?: 'admin' | 'member' | 'elder';
 };
 
 export default function ConfirmationScreen() {
@@ -23,6 +32,7 @@ export default function ConfirmationScreen() {
 
   const completeOnboarding = async () => {
     const fullNameResult = fullNameSchema.safeParse({ fullName: onboarding.fullName });
+    const isIndividual = onboarding.accountType === 'individual';
     const familyResult = familySchema.safeParse({ familyName: onboarding.familyName });
     const elderResult = elderSchema.safeParse({
       elderFullName: onboarding.elderFullName,
@@ -31,7 +41,21 @@ export default function ConfirmationScreen() {
       pharmacy: onboarding.pharmacy,
     });
 
-    if (!fullNameResult.success || !familyResult.success || !elderResult.success) {
+    const personalResult = personalProfileSchema.safeParse({
+      address: onboarding.address,
+      dateOfBirth: onboarding.elderDateOfBirth,
+      emergencyContactName: onboarding.emergencyContactName,
+      emergencyContactPhone: onboarding.emergencyContactPhone,
+      emergencyContactRelationship: onboarding.emergencyContactRelationship,
+      pharmacy: onboarding.pharmacy,
+      phone: onboarding.phone,
+      primaryDoctor: onboarding.primaryDoctor,
+    });
+
+    if (
+      !fullNameResult.success ||
+      (isIndividual ? !personalResult.success : (!familyResult.success || !elderResult.success))
+    ) {
       setErrorMessage('Some details are missing. Go back and complete each onboarding step.');
       return;
     }
@@ -39,14 +63,14 @@ export default function ConfirmationScreen() {
     setIsSubmitting(true);
     setErrorMessage(null);
 
-    const { data, error } = await supabase.rpc('complete_onboarding', {
-      p_full_name: fullNameResult.data.fullName,
-      p_family_name: familyResult.data.familyName,
-      p_elder_full_name: elderResult.data.elderFullName,
-      p_elder_date_of_birth: elderResult.data.elderDateOfBirth || null,
-      p_primary_doctor: elderResult.data.primaryDoctor || null,
-      p_pharmacy: elderResult.data.pharmacy || null,
-    });
+    const onboardingResponse = isIndividual
+      ? personalResult.success
+        ? await completeIndividual(fullNameResult.data.fullName, personalResult.data)
+        : { data: null, error: new Error('Personal profile is incomplete.') }
+      : familyResult.success && elderResult.success
+        ? await completeFamily(fullNameResult.data.fullName, familyResult.data, elderResult.data)
+        : { data: null, error: new Error('Family profile is incomplete.') };
+    const { data, error } = onboardingResponse;
 
     if (error) {
       setErrorMessage(error.message);
@@ -56,7 +80,7 @@ export default function ConfirmationScreen() {
 
     const result = data as OnboardingResult;
     setActiveElder(result.elder_profile_id);
-    setRole('admin');
+    setRole(result.role ?? 'admin');
     resetOnboarding();
 
     try {
@@ -76,14 +100,26 @@ export default function ConfirmationScreen() {
       <OnboardingHeader canGoBack step={4} />
       <SectionHeader
         description="Make sure everything looks right before creating your private care space."
-        title="Ready to create your circle?"
+        title={onboarding.accountType === 'individual' ? 'Ready to create your profile?' : 'Ready to create your circle?'}
       />
       <AppCard style={styles.summary}>
         <SummaryRow icon="person" label="Your name" value={onboarding.fullName} />
         <View style={styles.divider} />
-        <SummaryRow icon="people" label="Family circle" value={onboarding.familyName} />
+        <SummaryRow
+          icon={onboarding.accountType === 'individual' ? 'person-circle' : 'people'}
+          label="Account type"
+          value={onboarding.accountType === 'individual' ? 'Individual care' : 'Family caregiving'}
+        />
         <View style={styles.divider} />
-        <SummaryRow icon="heart" label="Elder profile" value={onboarding.elderFullName} />
+        {onboarding.accountType === 'individual' ? (
+          <SummaryRow icon="medical" label="Emergency profile" value="Personal emergency details" />
+        ) : (
+          <>
+            <SummaryRow icon="people" label="Family circle" value={onboarding.familyName} />
+            <View style={styles.divider} />
+            <SummaryRow icon="heart" label="Elder profile" value={onboarding.elderFullName} />
+          </>
+        )}
         {onboarding.elderDateOfBirth ? (
           <>
             <View style={styles.divider} />
@@ -98,8 +134,9 @@ export default function ConfirmationScreen() {
       <View style={styles.notice}>
         <Ionicons color={colors.primary} name="shield-checkmark" size={22} />
         <AppText color="inkMuted" style={styles.noticeCopy} variant="caption">
-          Your family circle is private. Only approved members will be able to access its care
-          information.
+          {onboarding.accountType === 'individual'
+            ? 'Your individual profile is private to you unless you later invite family members.'
+            : 'Your family circle is private. Only approved members will be able to access its care information.'}
         </AppText>
       </View>
       {errorMessage ? (
@@ -110,12 +147,37 @@ export default function ConfirmationScreen() {
         </View>
       ) : null}
       <AppButton
-        label="Create family circle"
+        label={onboarding.accountType === 'individual' ? 'Create personal profile' : 'Create family circle'}
         loading={isSubmitting}
         onPress={() => void completeOnboarding()}
       />
     </Screen>
   );
+}
+
+function completeIndividual(fullName: string, values: PersonalProfileValues) {
+  return supabase.rpc('complete_individual_onboarding', {
+    p_address: values.address || '',
+    p_date_of_birth: values.dateOfBirth || null,
+    p_emergency_contact_name: values.emergencyContactName || '',
+    p_emergency_contact_phone: values.emergencyContactPhone || '',
+    p_emergency_contact_relationship: values.emergencyContactRelationship || '',
+    p_full_name: fullName,
+    p_pharmacy: values.pharmacy || '',
+    p_phone: values.phone || '',
+    p_primary_doctor: values.primaryDoctor || '',
+  });
+}
+
+function completeFamily(fullName: string, family: FamilyValues, elder: ElderValues) {
+  return supabase.rpc('complete_onboarding', {
+    p_full_name: fullName,
+    p_family_name: family.familyName,
+    p_elder_full_name: elder.elderFullName,
+    p_elder_date_of_birth: elder.elderDateOfBirth || null,
+    p_primary_doctor: elder.primaryDoctor || null,
+    p_pharmacy: elder.pharmacy || null,
+  });
 }
 
 function SummaryRow({

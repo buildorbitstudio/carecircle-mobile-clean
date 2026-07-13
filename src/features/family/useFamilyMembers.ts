@@ -39,7 +39,7 @@ export function useFamilyMembers() {
         if (!ownMembership) throw new Error('No active family circle was found.');
         const isAdmin = ownMembership.role === 'admin';
 
-        const [familyResult, membershipsResult, invitationsResult] = await Promise.all([
+        const [familyResult, membershipsResult] = await Promise.all([
           supabase
             .from('families')
             .select('name')
@@ -51,21 +51,46 @@ export function useFamilyMembers() {
             .eq('family_id', ownMembership.family_id)
             .eq('status', 'active')
             .order('created_at'),
-          isAdmin
-            ? supabase
-                .from('family_invitations')
-                .select(
-                  'id, family_id, email, role, status, invited_by, expires_at, created_at',
-                )
-                .eq('family_id', ownMembership.family_id)
-                .eq('status', 'pending')
-                .order('created_at', { ascending: false })
-            : Promise.resolve({ data: [], error: null }),
         ]);
 
         if (familyResult.error) throw familyResult.error;
         if (membershipsResult.error) throw membershipsResult.error;
-        if (invitationsResult.error) throw invitationsResult.error;
+
+        let invitationsData: FamilyInvitation[] = [];
+        if (isAdmin) {
+          const invitationsResult = await supabase
+            .from('family_invitations')
+            .select(
+              'id, family_id, email, role, status, invited_by, invite_token, expires_at, created_at',
+            )
+            .eq('family_id', ownMembership.family_id)
+            .eq('status', 'pending')
+            .order('created_at', { ascending: false });
+
+          if (invitationsResult.error) {
+            const missingInviteToken =
+              invitationsResult.error.message?.includes('invite_token') ||
+              invitationsResult.error.message?.includes('column') ||
+              invitationsResult.error.code === '42703';
+
+            if (!missingInviteToken) throw invitationsResult.error;
+
+            const fallbackInvitationsResult = await supabase
+              .from('family_invitations')
+              .select('id, family_id, email, role, status, invited_by, expires_at, created_at')
+              .eq('family_id', ownMembership.family_id)
+              .eq('status', 'pending')
+              .order('created_at', { ascending: false });
+
+            if (fallbackInvitationsResult.error) throw fallbackInvitationsResult.error;
+            invitationsData = (fallbackInvitationsResult.data ?? []).map((invitation) => ({
+              ...invitation,
+              invite_token: '',
+            })) as FamilyInvitation[];
+          } else {
+            invitationsData = (invitationsResult.data ?? []) as FamilyInvitation[];
+          }
+        }
 
         const userIds = (membershipsResult.data ?? []).map((member) => member.user_id);
         const profilesResult = userIds.length
@@ -101,7 +126,7 @@ export function useFamilyMembers() {
             };
           }) as FamilyMember[],
         );
-        setInvitations((invitationsResult.data ?? []) as FamilyInvitation[]);
+        setInvitations(invitationsData);
       } catch (caughtError) {
         setError(
           caughtError instanceof Error ? caughtError.message : 'Unable to load family members.',

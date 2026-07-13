@@ -20,6 +20,7 @@ export type FamilyInvitation = {
   role: FamilyRole;
   status: 'pending' | 'accepted' | 'revoked' | 'expired';
   invited_by: string;
+  invite_token: string;
   expires_at: string;
   created_at: string;
 };

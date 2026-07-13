@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
 import { useAppStore } from '@/store/app-store';
+import { resolveCareContext } from '@/features/care-context/resolveCareContext';
 
 export type ScheduleMedication = {
   id: string;
@@ -31,7 +32,14 @@ type ScheduleContext = {
 
 export function useScheduleData() {
   const { session } = useAuth();
-  const { activeElderId, setActiveElder } = useAppStore();
+  const {
+    accountMode,
+    activeElderId,
+    activeFamilyId,
+    setActiveElder,
+    setActiveFamily,
+    setRole,
+  } = useAppStore();
   const [context, setContext] = useState<ScheduleContext | null>(null);
   const [medications, setMedications] = useState<ScheduleMedication[]>([]);
   const [appointments, setAppointments] = useState<ScheduleAppointment[]>([]);
@@ -46,46 +54,34 @@ export function useScheduleData() {
       setError(null);
 
       try {
-        const { data: membership, error: membershipError } = await supabase
-          .from('family_members')
-          .select('family_id')
-          .eq('user_id', session.user.id)
-          .eq('status', 'active')
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .maybeSingle();
-        if (membershipError) throw membershipError;
-        if (!membership) throw new Error('No active family circle was found.');
-
-        const { data: elders, error: elderError } = await supabase
-          .from('elder_profiles')
-          .select('id, full_name')
-          .eq('family_id', membership.family_id)
-          .order('created_at', { ascending: true });
-        if (elderError) throw elderError;
-
-        const elder = elders?.find((item) => item.id === activeElderId) ?? elders?.[0];
-        if (!elder) throw new Error('No elder profile was found.');
+        const careContext = await resolveCareContext({
+          accountMode,
+          activeElderId,
+          activeFamilyId,
+          userId: session.user.id,
+        });
 
         const [medicationResult, appointmentResult] = await Promise.all([
           supabase
             .from('medications')
             .select('id, name, dosage, frequency, scheduled_times')
-            .eq('elder_profile_id', elder.id)
+            .eq('elder_profile_id', careContext.elderId)
             .eq('active', true)
             .order('name', { ascending: true }),
           supabase
             .from('appointments')
             .select('id, title, clinic_name, location, appointment_time, notes, status')
-            .eq('elder_profile_id', elder.id)
+            .eq('elder_profile_id', careContext.elderId)
             .neq('status', 'cancelled')
             .order('appointment_time', { ascending: true }),
         ]);
         if (medicationResult.error) throw medicationResult.error;
         if (appointmentResult.error) throw appointmentResult.error;
 
-        setActiveElder(elder.id);
-        setContext({ elderId: elder.id, elderName: elder.full_name });
+        setActiveElder(careContext.elderId);
+        setActiveFamily(careContext.familyId);
+        setRole(careContext.role);
+        setContext({ elderId: careContext.elderId, elderName: careContext.elderName });
         setMedications(
           (medicationResult.data ?? []).map((medication) => ({
             ...medication,
@@ -102,7 +98,7 @@ export function useScheduleData() {
         setIsRefreshing(false);
       }
     },
-    [activeElderId, session?.user.id, setActiveElder],
+    [accountMode, activeElderId, activeFamilyId, session?.user.id, setActiveElder, setActiveFamily, setRole],
   );
 
   useFocusEffect(

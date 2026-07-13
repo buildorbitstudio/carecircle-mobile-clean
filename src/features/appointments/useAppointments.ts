@@ -5,11 +5,19 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
 import { useAppStore } from '@/store/app-store';
+import { resolveCareContext } from '@/features/care-context/resolveCareContext';
 import { Appointment, AppointmentContext } from './types';
 
 export function useAppointments() {
   const { session } = useAuth();
-  const { activeElderId, setActiveElder } = useAppStore();
+  const {
+    accountMode,
+    activeElderId,
+    activeFamilyId,
+    setActiveElder,
+    setActiveFamily,
+    setRole,
+  } = useAppStore();
   const [context, setContext] = useState<AppointmentContext | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -21,27 +29,27 @@ export function useAppointments() {
     if (refresh) setIsRefreshing(true);
     setError(null);
     try {
-      const { data: membership, error: membershipError } = await supabase
-        .from('family_members').select('family_id').eq('user_id', session.user.id)
-        .eq('status', 'active').order('created_at').limit(1).maybeSingle();
-      if (membershipError) throw membershipError;
-      if (!membership) throw new Error('No active family circle was found.');
-
-      const { data: elders, error: elderError } = await supabase
-        .from('elder_profiles').select('id, full_name').eq('family_id', membership.family_id)
-        .order('created_at');
-      if (elderError) throw elderError;
-      const elder = elders?.find((item) => item.id === activeElderId) ?? elders?.[0];
-      if (!elder) throw new Error('No elder profile was found.');
+      const careContext = await resolveCareContext({
+        accountMode,
+        activeElderId,
+        activeFamilyId,
+        userId: session.user.id,
+      });
 
       const { data, error: appointmentError } = await supabase
         .from('appointments')
         .select('id, elder_profile_id, title, clinic_name, location, appointment_time, notes, reminder_minutes, status, created_at, updated_at')
-        .eq('elder_profile_id', elder.id)
+        .eq('elder_profile_id', careContext.elderId)
         .order('appointment_time', { ascending: true });
       if (appointmentError) throw appointmentError;
-      setActiveElder(elder.id);
-      setContext({ familyId: membership.family_id, elderId: elder.id, elderName: elder.full_name });
+      setActiveElder(careContext.elderId);
+      setActiveFamily(careContext.familyId);
+      setRole(careContext.role);
+      setContext({
+        familyId: careContext.familyId,
+        elderId: careContext.elderId,
+        elderName: careContext.elderName,
+      });
       setAppointments((data ?? []) as Appointment[]);
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : 'Unable to load appointments.');
@@ -49,7 +57,7 @@ export function useAppointments() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [activeElderId, session?.user.id, setActiveElder]);
+  }, [accountMode, activeElderId, activeFamilyId, session?.user.id, setActiveElder, setActiveFamily, setRole]);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 

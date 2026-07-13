@@ -23,6 +23,21 @@ type AuthContextValue = {
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+const AUTH_RESTORE_TIMEOUT_MS = 12000;
+
+async function withTimeout<T>(promise: Promise<T>, label: string) {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`${label} timed out.`)), AUTH_RESTORE_TIMEOUT_MS);
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
 
 function assertConfigured() {
   if (!isSupabaseConfigured) {
@@ -54,17 +69,29 @@ export function AuthProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     let mounted = true;
 
-    void supabase.auth.getSession().then(({ data, error }) => {
-      if (!mounted) return;
+    void withTimeout(supabase.auth.getSession(), 'Restoring your session')
+      .then(({ data, error }) => {
+        if (!mounted) return;
 
-      if (error) {
-        console.warn('Unable to restore Supabase session:', error.message);
-      }
+        if (error) {
+          console.warn('Unable to restore Supabase session:', error.message);
+        }
 
-      setSession(data.session);
-      setIsCheckingOnboarding(Boolean(data.session));
-      setIsRestoringSession(false);
-    });
+        setSession(data.session);
+        setIsCheckingOnboarding(Boolean(data.session));
+        setIsRestoringSession(false);
+      })
+      .catch((error: unknown) => {
+        if (!mounted) return;
+        console.warn(
+          'Unable to restore Supabase session:',
+          error instanceof Error ? error.message : error,
+        );
+        setSession(null);
+        setOnboardingComplete(false);
+        setIsCheckingOnboarding(false);
+        setIsRestoringSession(false);
+      });
 
     const {
       data: { subscription },
@@ -87,7 +114,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     if (!userId) return;
 
     let cancelled = false;
-    void fetchOnboardingStatus(userId)
+    void withTimeout(fetchOnboardingStatus(userId), 'Checking onboarding')
       .then((complete) => {
         if (cancelled) return;
         setOnboardingComplete(complete);

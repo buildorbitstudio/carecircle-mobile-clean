@@ -37,7 +37,7 @@ export default function FullNameScreen() {
 
   const submit = ({ fullName }: FullNameValues) => {
     updateOnboarding({ fullName: fullName.trim() });
-    router.push('/family-circle');
+    router.push('/account-type');
   };
 
   return (

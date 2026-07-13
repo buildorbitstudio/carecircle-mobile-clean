@@ -54,7 +54,6 @@ export function ToastProvider({ children }: PropsWithChildren) {
         <View
           accessibilityLiveRegion="polite"
           accessibilityRole={toast.tone === 'error' ? 'alert' : undefined}
-          pointerEvents="none"
           style={[styles.toast, { backgroundColor: palette.background, top: insets.top + spacing.md }]}>
           <Ionicons color={colors.white} name={palette.icon} size={22} />
           <AppText color="white" style={styles.message} variant="bodyStrong">
@@ -84,6 +83,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     position: 'absolute',
+    pointerEvents: 'none',
     right: spacing.lg,
     zIndex: 100,
     ...shadows.raised,

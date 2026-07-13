@@ -72,6 +72,7 @@ function RootNavigator() {
           <Stack.Screen name="settings" options={{ title: 'Settings' }} />
           <Stack.Screen name="error-test" options={{ title: 'Recovery Test' }} />
         </Stack.Protected>
+        <Stack.Screen name="join" options={{ title: 'Join Family' }} />
       </Stack>
     </View>
   );

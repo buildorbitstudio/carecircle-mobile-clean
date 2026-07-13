@@ -1,11 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppButton, AppText, FormField, Screen, SectionHeader } from '@/components/ui';
-import { TaskPriority } from '@/features/tasks/types';
+import { FamilyAssignee, TaskPriority } from '@/features/tasks/types';
 import { useCareTasks } from '@/features/tasks/useCareTasks';
 import { supabase } from '@/lib/supabase';
 import { colors, radius, spacing } from '@/theme';
@@ -48,13 +49,14 @@ export default function AddTaskScreen() {
   const submit = async (values: TaskFormValues) => {
     if (!context) return;
     setSubmitError(null);
+    const assignedTo = context.isAdmin ? values.assignedTo || null : null;
 
     const { data, error } = await supabase.rpc('create_care_task', {
       p_family_id: context.familyId,
       p_elder_profile_id: context.elderId,
       p_title: values.title.trim(),
       p_description: values.description?.trim() || null,
-      p_assigned_to: values.assignedTo || null,
+      p_assigned_to: assignedTo,
       p_due_date: endOfLocalDate(values.dueDate),
       p_priority: values.priority,
     });
@@ -122,7 +124,24 @@ export default function AddTaskScreen() {
           name="assignedTo"
           render={({ field: { onChange, value } }) => (
             <View style={styles.fieldGroup}>
-              <AppText variant="caption">Assigned family member</AppText>
+              <View style={styles.assignmentHeader}>
+                <View style={styles.assignmentTitle}>
+                  <Ionicons color={colors.primary} name="people" size={19} />
+                  <AppText variant="caption">Assign to family member</AppText>
+                </View>
+                {context?.isAdmin ? (
+                  <View style={styles.adminPill}>
+                    <AppText color="primary" variant="caption">
+                      Admin
+                    </AppText>
+                  </View>
+                ) : null}
+              </View>
+              <AppText color="inkMuted" variant="caption">
+                {context?.isAdmin
+                  ? 'Choose any active person in this family circle.'
+                  : 'Only family admins can assign a task to a specific person. This task will be created as unassigned.'}
+              </AppText>
               <Pressable
                 accessibilityRole="radio"
                 accessibilityState={{ checked: value === '' }}
@@ -140,29 +159,47 @@ export default function AddTaskScreen() {
                   </AppText>
                 </View>
               </Pressable>
-              {members.map((member) => {
-                const selected = value === member.userId;
-                return (
-                  <Pressable
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: selected }}
-                    key={member.userId}
-                    onPress={() => onChange(member.userId)}
-                    style={[styles.memberCard, selected && styles.selectedCard]}>
-                    <View style={styles.memberAvatar}>
-                      <AppText color="primary" variant="bodyStrong">
-                        {initials(member.fullName)}
-                      </AppText>
-                    </View>
-                    <View style={styles.grow}>
-                      <AppText variant="bodyStrong">{member.fullName}</AppText>
-                      <AppText color="inkMuted" variant="caption">
-                        {capitalize(member.role)}
-                      </AppText>
-                    </View>
-                  </Pressable>
-                );
-              })}
+              {groupAssignees(members).map((group) => (
+                <View key={group.role} style={styles.assigneeGroup}>
+                  <AppText color="inkMuted" variant="caption">
+                    {group.label} ({group.members.length})
+                  </AppText>
+                  {group.members.map((member) => {
+                    const selected = value === member.userId;
+                    return (
+                      <Pressable
+                        accessibilityRole="radio"
+                        accessibilityState={{
+                          checked: selected,
+                          disabled: !context?.isAdmin,
+                        }}
+                        disabled={!context?.isAdmin}
+                        key={member.userId}
+                        onPress={() => onChange(member.userId)}
+                        style={[
+                          styles.memberCard,
+                          selected && styles.selectedCard,
+                          !context?.isAdmin && styles.disabledCard,
+                        ]}>
+                        <View style={styles.memberAvatar}>
+                          <AppText color="primary" variant="bodyStrong">
+                            {initials(member.fullName)}
+                          </AppText>
+                        </View>
+                        <View style={styles.grow}>
+                          <AppText variant="bodyStrong">{member.fullName}</AppText>
+                          <AppText color="inkMuted" variant="caption">
+                            {member.email || capitalize(member.role)}
+                          </AppText>
+                        </View>
+                        {selected ? (
+                          <Ionicons color={colors.primary} name="checkmark-circle" size={24} />
+                        ) : null}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ))}
             </View>
           )}
         />
@@ -247,13 +284,46 @@ function initials(name: string) {
 }
 
 function capitalize(value: string) {
-  return value.charAt(0).toUpperCase() + value.slice(1);
+  return value
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function groupAssignees(members: FamilyAssignee[]) {
+  const order: FamilyAssignee['role'][] = ['admin', 'member', 'elder'];
+  const labels: Record<FamilyAssignee['role'], string> = {
+    admin: 'Admins',
+    member: 'Family members',
+    elder: 'Elders',
+  };
+
+  return order
+    .map((role) => ({
+      label: labels[role],
+      members: members.filter((member) => member.role === role),
+      role,
+    }))
+    .filter((group) => group.members.length > 0);
 }
 
 const styles = StyleSheet.create({
   form: { gap: spacing.lg },
   multiline: { minHeight: 100, paddingTop: spacing.md },
   fieldGroup: { gap: spacing.sm },
+  assignmentHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  assignmentTitle: { alignItems: 'center', flexDirection: 'row', gap: spacing.xs },
+  adminPill: {
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  assigneeGroup: { gap: spacing.sm },
   memberCard: {
     alignItems: 'center',
     backgroundColor: colors.surface,
@@ -265,6 +335,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   selectedCard: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
+  disabledCard: { opacity: 0.58 },
   memberAvatar: {
     alignItems: 'center',
     backgroundColor: colors.primarySoft,

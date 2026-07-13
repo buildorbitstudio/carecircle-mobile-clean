@@ -1,9 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
-import { AppButton, AppCard, AppText, Screen } from '@/components/ui';
+import {
+  AppButton,
+  AppCard,
+  AppText,
+  ConfirmationModal,
+  Screen,
+} from '@/components/ui';
 import { CareTask } from '@/features/tasks/types';
 import { useTaskDetail } from '@/features/tasks/useTaskDetail';
 import { colors, radius, spacing } from '@/theme';
@@ -14,6 +20,7 @@ export default function TaskDetailScreen() {
   const { task, isLoading, isRefreshing, error, refresh, retry, complete } =
     useTaskDetail(taskId ?? '');
   const [isCompleting, setIsCompleting] = useState(false);
+  const [showCompletionConfirmation, setShowCompletionConfirmation] = useState(false);
   const [completionError, setCompletionError] = useState<string | null>(null);
   const [completionSuccess, setCompletionSuccess] = useState(false);
 
@@ -23,6 +30,7 @@ export default function TaskDetailScreen() {
     try {
       await complete();
       setCompletionSuccess(true);
+      setShowCompletionConfirmation(false);
     } catch (caughtError) {
       setCompletionError(
         caughtError instanceof Error ? caughtError.message : 'Unable to complete the task.',
@@ -30,13 +38,6 @@ export default function TaskDetailScreen() {
     } finally {
       setIsCompleting(false);
     }
-  };
-
-  const confirmCompletion = () => {
-    Alert.alert('Complete this task?', 'This will add a completion event to the health timeline.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Complete', onPress: () => void completeTask() },
-    ]);
   };
 
   if (isLoading && !task) {
@@ -147,7 +148,10 @@ export default function TaskDetailScreen() {
         <AppButton
           label="Complete task"
           loading={isCompleting}
-          onPress={confirmCompletion}
+          onPress={() => {
+            setCompletionError(null);
+            setShowCompletionConfirmation(true);
+          }}
         />
       ) : (
         <View style={styles.completedCard}>
@@ -157,6 +161,18 @@ export default function TaskDetailScreen() {
           </AppText>
         </View>
       )}
+      <ConfirmationModal
+        confirmLabel="Complete Task"
+        description="This will mark the task complete and add an event to the health timeline."
+        error={completionError}
+        loading={isCompleting}
+        onCancel={() => {
+          if (!isCompleting) setShowCompletionConfirmation(false);
+        }}
+        onConfirm={() => void completeTask()}
+        title="Complete this task?"
+        visible={showCompletionConfirmation}
+      />
     </Screen>
   );
 }

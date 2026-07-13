@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { notifyUnansweredPings } from '@/lib/notifications/local-notifications';
 import { useAuth } from '@/providers/AuthProvider';
 import { useAppStore } from '@/store/app-store';
+import { resolveCareContext } from '@/features/care-context/resolveCareContext';
 
 export type DashboardMedication = {
   id: string;
@@ -42,16 +43,27 @@ export type DashboardTask = {
   due_date: string | null;
 };
 
+export type DashboardFamilyMember = {
+  id: string;
+  fullName: string;
+  email: string;
+  role: 'admin' | 'member' | 'elder';
+  isCurrentUser: boolean;
+};
+
 export type DashboardData = {
   userName: string;
   familyId: string;
   familyName: string;
+  isPersonal: boolean;
+  role: 'admin' | 'member' | 'elder';
   elder: {
     id: string;
     full_name: string;
     photo_url: string | null;
     date_of_birth: string | null;
   };
+  familyMembers: DashboardFamilyMember[];
   medications: DashboardMedication[];
   recentPings: DashboardPing[];
   lastWellness: DashboardPing | null;
@@ -68,7 +80,14 @@ function localDateKey(date = new Date()) {
 
 export function useDashboardData() {
   const { session } = useAuth();
-  const { activeElderId, setActiveElder, setRole } = useAppStore();
+  const {
+    accountMode,
+    activeElderId,
+    activeFamilyId,
+    setActiveElder,
+    setActiveFamily,
+    setRole,
+  } = useAppStore();
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -99,45 +118,57 @@ export function useDashboardData() {
         );
         if (overdueTasksError) throw overdueTasksError;
 
-        const [profileResult, membershipResult] = await Promise.all([
+        const [profileResult, careContext] = await Promise.all([
           supabase
             .from('users_profile')
             .select('full_name')
             .eq('id', userId)
             .maybeSingle(),
-          supabase
-            .from('family_members')
-            .select('family_id, role')
-            .eq('user_id', userId)
-            .eq('status', 'active')
-            .order('created_at', { ascending: true })
-            .limit(1)
-            .maybeSingle(),
+          resolveCareContext({
+            accountMode,
+            activeElderId,
+            activeFamilyId,
+            userId,
+          }),
         ]);
 
         if (profileResult.error) throw profileResult.error;
-        if (membershipResult.error) throw membershipResult.error;
-        if (!membershipResult.data) throw new Error('No active family circle was found.');
 
-        const familyId = membershipResult.data.family_id as string;
-        const [familyResult, eldersResult] = await Promise.all([
-          supabase.from('families').select('name').eq('id', familyId).single(),
+        const familyId = careContext.familyId;
+        const [elderResult, familyMembersResult] = await Promise.all([
           supabase
             .from('elder_profiles')
             .select('id, full_name, photo_url, date_of_birth')
+            .eq('id', careContext.elderId)
+            .single(),
+          supabase
+            .from('family_members')
+            .select('id, user_id, role, created_at')
             .eq('family_id', familyId)
+            .eq('status', 'active')
             .order('created_at', { ascending: true }),
         ]);
 
-        if (familyResult.error) throw familyResult.error;
-        if (eldersResult.error) throw eldersResult.error;
+        if (elderResult.error) throw elderResult.error;
+        if (familyMembersResult.error) throw familyMembersResult.error;
 
-        const elders = eldersResult.data ?? [];
-        const elder =
-          elders.find((item) => item.id === activeElderId) ??
-          elders[0];
+        const elder = elderResult.data;
 
-        if (!elder) throw new Error('No elder profile was found for this family circle.');
+        const familyMemberUserIds = (familyMembersResult.data ?? []).map(
+          (member) => member.user_id,
+        );
+        const familyProfilesResult = familyMemberUserIds.length
+          ? await supabase
+              .from('users_profile')
+              .select('id, full_name, email')
+              .in('id', familyMemberUserIds)
+          : { data: [], error: null };
+
+        if (familyProfilesResult.error) throw familyProfilesResult.error;
+
+        const profileById = new Map(
+          (familyProfilesResult.data ?? []).map((profile) => [profile.id, profile]),
+        );
 
         const today = localDateKey();
         const now = new Date();
@@ -225,15 +256,28 @@ export function useDashboardData() {
           }
         }
 
-        setActiveElder(elder.id);
-        setRole(membershipResult.data.role);
+        setActiveElder(careContext.elderId);
+        setActiveFamily(careContext.familyId);
+        setRole(careContext.role);
         setData({
           userName:
             profileResult.data?.full_name ??
             String(session.user.user_metadata.full_name ?? 'there'),
           familyId,
-          familyName: familyResult.data.name,
+          familyName: careContext.familyName,
+          isPersonal: careContext.isPersonal,
+          role: careContext.role,
           elder,
+          familyMembers: (familyMembersResult.data ?? []).map((member) => {
+            const profile = profileById.get(member.user_id);
+            return {
+              id: member.id,
+              email: profile?.email ?? '',
+              fullName: profile?.full_name ?? profile?.email ?? 'Family member',
+              isCurrentUser: member.user_id === userId,
+              role: member.role,
+            } as DashboardFamilyMember;
+          }),
           medications: (medicationsResult.data ?? []).map((medication) => ({
             ...medication,
             scheduled_times: medication.scheduled_times ?? [],
@@ -255,7 +299,7 @@ export function useDashboardData() {
         setIsRefreshing(false);
       }
     },
-    [activeElderId, session, setActiveElder, setRole],
+    [accountMode, activeElderId, activeFamilyId, session, setActiveElder, setActiveFamily, setRole],
   );
 
   useFocusEffect(

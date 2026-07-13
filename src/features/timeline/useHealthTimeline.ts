@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
 import { useAppStore } from '@/store/app-store';
+import { resolveCareContext } from '@/features/care-context/resolveCareContext';
 import {
   TimelineSeverity,
   TimelineSeverityFilter,
@@ -32,7 +33,14 @@ type TimelineContext = {
 
 export function useHealthTimeline() {
   const { session } = useAuth();
-  const { activeElderId, setActiveElder } = useAppStore();
+  const {
+    accountMode,
+    activeElderId,
+    activeFamilyId,
+    setActiveElder,
+    setActiveFamily,
+    setRole,
+  } = useAppStore();
   const [context, setContext] = useState<TimelineContext | null>(null);
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [typeFilter, setTypeFilter] = useState<TimelineTypeFilter>('all');
@@ -48,34 +56,19 @@ export function useHealthTimeline() {
       setError(null);
 
       try {
-        const { data: membership, error: membershipError } = await supabase
-          .from('family_members')
-          .select('family_id')
-          .eq('user_id', session.user.id)
-          .eq('status', 'active')
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .maybeSingle();
-
-        if (membershipError) throw membershipError;
-        if (!membership) throw new Error('No active family circle was found.');
-
-        const { data: elders, error: elderError } = await supabase
-          .from('elder_profiles')
-          .select('id, full_name')
-          .eq('family_id', membership.family_id)
-          .order('created_at', { ascending: true });
-
-        if (elderError) throw elderError;
-        const elder = elders?.find((item) => item.id === activeElderId) ?? elders?.[0];
-        if (!elder) throw new Error('No elder profile was found.');
+        const careContext = await resolveCareContext({
+          accountMode,
+          activeElderId,
+          activeFamilyId,
+          userId: session.user.id,
+        });
 
         let query = supabase
           .from('health_timeline_events')
           .select(
             'id, family_id, elder_profile_id, event_type, title, description, severity, created_by, source_table, source_id, created_at',
           )
-          .eq('elder_profile_id', elder.id)
+          .eq('elder_profile_id', careContext.elderId)
           .order('created_at', { ascending: false })
           .limit(100);
 
@@ -90,11 +83,13 @@ export function useHealthTimeline() {
         const { data: eventRows, error: eventsError } = await query;
         if (eventsError) throw eventsError;
 
-        setActiveElder(elder.id);
+        setActiveElder(careContext.elderId);
+        setActiveFamily(careContext.familyId);
+        setRole(careContext.role);
         setContext({
-          familyId: membership.family_id,
-          elderId: elder.id,
-          elderName: elder.full_name,
+          familyId: careContext.familyId,
+          elderId: careContext.elderId,
+          elderName: careContext.elderName,
         });
         setEvents((eventRows ?? []) as TimelineEvent[]);
       } catch (caughtError) {
@@ -108,7 +103,7 @@ export function useHealthTimeline() {
         setIsRefreshing(false);
       }
     },
-    [activeElderId, session, setActiveElder, severityFilter, typeFilter],
+    [accountMode, activeElderId, activeFamilyId, session, setActiveElder, setActiveFamily, setRole, severityFilter, typeFilter],
   );
 
   useEffect(() => {

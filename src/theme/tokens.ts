@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 export const colors = {
   canvas: '#F8F7F2',
   surface: '#FFFFFF',
@@ -67,27 +69,33 @@ export const buttonSizes = {
 export const tapTargets = { minimum: 48, comfortable: 56, elder: 88 } as const;
 
 export const shadows = {
-  subtle: {
-    shadowColor: colors.ink,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
-  },
-  card: {
-    shadowColor: colors.ink,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    elevation: 3,
-  },
-  raised: {
-    shadowColor: colors.ink,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    elevation: 6,
-  },
+  subtle: Platform.OS === 'web'
+    ? { boxShadow: '0 2px 8px rgba(32, 43, 42, 0.04)' }
+    : {
+        shadowColor: colors.ink,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+        elevation: 1,
+      },
+  card: Platform.OS === 'web'
+    ? { boxShadow: '0 6px 18px rgba(32, 43, 42, 0.08)' }
+    : {
+        shadowColor: colors.ink,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.08,
+        shadowRadius: 18,
+        elevation: 3,
+      },
+  raised: Platform.OS === 'web'
+    ? { boxShadow: '0 10px 24px rgba(32, 43, 42, 0.12)' }
+    : {
+        shadowColor: colors.ink,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.12,
+        shadowRadius: 24,
+        elevation: 6,
+      },
 } as const;
 
 export const layout = {

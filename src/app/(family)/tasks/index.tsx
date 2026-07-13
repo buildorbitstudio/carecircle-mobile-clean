@@ -1,14 +1,21 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
+import { CareCalendarView } from '@/components/calendar/CareCalendarView';
 import { AppButton, AppCard, AppText, EmptyState, Screen, SectionHeader } from '@/components/ui';
+import { useCareCalendarItems } from '@/features/calendar/useCareCalendarItems';
 import { CareTask } from '@/features/tasks/types';
 import { useCareTasks } from '@/features/tasks/useCareTasks';
 import { colors, radius, spacing } from '@/theme';
 
+type ViewMode = 'list' | 'calendar';
+
 export default function TasksScreen() {
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const { context, tasks, isLoading, isRefreshing, error, refresh, retry } = useCareTasks();
+  const calendar = useCareCalendarItems();
   const openTasks = tasks.filter((task) => task.status !== 'completed');
   const completedTasks = tasks.filter((task) => task.status === 'completed');
 
@@ -37,22 +44,34 @@ export default function TasksScreen() {
   }
 
   return (
-    <Screen onRefresh={() => void refresh()} refreshing={isRefreshing}>
-      <SectionHeader
-        description={`Coordinate everyday care for ${context?.elderName ?? 'your loved one'}.`}
-        title="Family Tasks"
-      />
-      <AppButton label="Add care task" onPress={() => router.push('/tasks/add')} />
-
-      <View style={styles.summary}>
-        <SummaryCard count={openTasks.length} label="Open" tone="primary" />
-        <SummaryCard
-          count={openTasks.filter((task) => task.status === 'overdue').length}
-          label="Overdue"
-          tone="danger"
-        />
-        <SummaryCard count={completedTasks.length} label="Completed" tone="success" />
+    <Screen
+      onRefresh={() => void (viewMode === 'calendar' ? calendar.refresh() : refresh())}
+      refreshing={viewMode === 'calendar' ? calendar.isRefreshing : isRefreshing}>
+      <View style={styles.headerRow}>
+        <View style={styles.headerCopy}>
+          <SectionHeader
+            description={`Coordinate everyday care for ${context?.elderName ?? calendar.context?.elderName ?? 'your loved one'}.`}
+            title="Family Tasks"
+          />
+        </View>
+        <ViewToggle value={viewMode} onChange={setViewMode} />
       </View>
+
+      {viewMode === 'list' ? (
+        <>
+          <AppButton label="Add care task" onPress={() => router.push('/tasks/add')} />
+
+          <View style={styles.summary}>
+            <SummaryCard count={openTasks.length} label="Open" tone="primary" />
+            <SummaryCard
+              count={openTasks.filter((task) => task.status === 'overdue').length}
+              label="Overdue"
+              tone="danger"
+            />
+            <SummaryCard count={completedTasks.length} label="Completed" tone="success" />
+          </View>
+        </>
+      ) : null}
 
       {error ? (
         <View accessibilityRole="alert" style={styles.warningBanner}>
@@ -62,22 +81,70 @@ export default function TasksScreen() {
         </View>
       ) : null}
 
-      <TaskSection
-        emptyDescription="Create a task when your family needs to coordinate care."
-        emptyTitle="No open tasks"
-        tasks={openTasks}
-        title={`Open tasks (${openTasks.length})`}
-      />
-
-      {completedTasks.length ? (
-        <TaskSection
-          emptyDescription=""
-          emptyTitle=""
-          tasks={completedTasks}
-          title={`Completed (${completedTasks.length})`}
+      {viewMode === 'calendar' ? (
+        <CareCalendarView
+          appointments={calendar.appointments}
+          error={calendar.error}
+          isLoading={calendar.isLoading}
+          medications={calendar.medications}
+          onRetry={() => void calendar.retry()}
+          tasks={calendar.tasks}
         />
-      ) : null}
+      ) : (
+        <>
+          <TaskSection
+            emptyDescription="Create a task when your family needs to coordinate care."
+            emptyTitle="No open tasks"
+            tasks={openTasks}
+            title={`Open tasks (${openTasks.length})`}
+          />
+
+          {completedTasks.length ? (
+            <TaskSection
+              emptyDescription=""
+              emptyTitle=""
+              tasks={completedTasks}
+              title={`Completed (${completedTasks.length})`}
+            />
+          ) : null}
+        </>
+      )}
     </Screen>
+  );
+}
+
+function ViewToggle({
+  onChange,
+  value,
+}: {
+  onChange: (value: ViewMode) => void;
+  value: ViewMode;
+}) {
+  return (
+    <View accessibilityRole="tablist" style={styles.toggle}>
+      {(['list', 'calendar'] as const).map((mode) => {
+        const selected = value === mode;
+        return (
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected }}
+            key={mode}
+            onPress={() => onChange(mode)}
+            style={[styles.toggleOption, selected && styles.toggleSelected]}>
+            <Ionicons
+              color={selected ? colors.white : colors.primary}
+              name={mode === 'list' ? 'list' : 'calendar'}
+              size={17}
+            />
+            <AppText
+              style={{ color: selected ? colors.white : colors.primary }}
+              variant="caption">
+              {mode === 'list' ? 'List' : 'Calendar'}
+            </AppText>
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }
 
@@ -203,6 +270,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.xxl,
   },
+  headerRow: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between',
+  },
+  headerCopy: { flex: 1 },
+  toggle: {
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.pill,
+    flexDirection: 'row',
+    padding: spacing.xs,
+  },
+  toggleOption: {
+    alignItems: 'center',
+    borderRadius: radius.pill,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    minHeight: 38,
+    paddingHorizontal: spacing.sm,
+  },
+  toggleSelected: { backgroundColor: colors.primary },
   summary: { flexDirection: 'row', gap: spacing.sm },
   summaryCard: {
     alignItems: 'center',

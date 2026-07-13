@@ -4,17 +4,26 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
 import { useAppStore } from '@/store/app-store';
+import { resolveCareContext } from '@/features/care-context/resolveCareContext';
 import { CareTask, FamilyAssignee } from './types';
 
 type TaskContext = {
   familyId: string;
   elderId: string;
   elderName: string;
+  isAdmin: boolean;
 };
 
 export function useCareTasks() {
   const { session } = useAuth();
-  const { activeElderId, setActiveElder } = useAppStore();
+  const {
+    accountMode,
+    activeElderId,
+    activeFamilyId,
+    setActiveElder,
+    setActiveFamily,
+    setRole,
+  } = useAppStore();
   const [context, setContext] = useState<TaskContext | null>(null);
   const [tasks, setTasks] = useState<CareTask[]>([]);
   const [members, setMembers] = useState<FamilyAssignee[]>([]);
@@ -32,37 +41,22 @@ export function useCareTasks() {
         const { error: overdueError } = await supabase.rpc('refresh_overdue_care_tasks');
         if (overdueError) throw overdueError;
 
-        const { data: membership, error: membershipError } = await supabase
-          .from('family_members')
-          .select('family_id')
-          .eq('user_id', session.user.id)
-          .eq('status', 'active')
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .maybeSingle();
+        const careContext = await resolveCareContext({
+          accountMode,
+          activeElderId,
+          activeFamilyId,
+          userId: session.user.id,
+        });
 
-        if (membershipError) throw membershipError;
-        if (!membership) throw new Error('No active family circle was found.');
-
-        const [eldersResult, membershipsResult] = await Promise.all([
-          supabase
-            .from('elder_profiles')
-            .select('id, full_name')
-            .eq('family_id', membership.family_id)
-            .order('created_at', { ascending: true }),
+        const [membershipsResult] = await Promise.all([
           supabase
             .from('family_members')
             .select('user_id, role')
-            .eq('family_id', membership.family_id)
+            .eq('family_id', careContext.familyId)
             .eq('status', 'active'),
         ]);
 
-        if (eldersResult.error) throw eldersResult.error;
         if (membershipsResult.error) throw membershipsResult.error;
-        const elder =
-          eldersResult.data?.find((item) => item.id === activeElderId) ??
-          eldersResult.data?.[0];
-        if (!elder) throw new Error('No elder profile was found.');
 
         const memberIds = (membershipsResult.data ?? []).map((member) => member.user_id);
         const [tasksResult, profilesResult] = await Promise.all([
@@ -71,7 +65,7 @@ export function useCareTasks() {
             .select(
               'id, family_id, elder_profile_id, title, description, assigned_to, due_date, priority, status, created_by, created_at, completed_at, updated_at',
             )
-            .eq('elder_profile_id', elder.id)
+            .eq('elder_profile_id', careContext.elderId)
             .order('status', { ascending: false })
             .order('due_date', { ascending: true, nullsFirst: false })
             .limit(100),
@@ -100,11 +94,14 @@ export function useCareTasks() {
         });
         const nameById = new Map(assignees.map((member) => [member.userId, member.fullName]));
 
-        setActiveElder(elder.id);
+        setActiveElder(careContext.elderId);
+        setActiveFamily(careContext.familyId);
+        setRole(careContext.role);
         setContext({
-          familyId: membership.family_id,
-          elderId: elder.id,
-          elderName: elder.full_name,
+          familyId: careContext.familyId,
+          elderId: careContext.elderId,
+          elderName: careContext.elderName,
+          isAdmin: careContext.isAdmin,
         });
         setMembers(assignees);
         setTasks(
@@ -120,7 +117,7 @@ export function useCareTasks() {
         setIsRefreshing(false);
       }
     },
-    [activeElderId, session, setActiveElder],
+    [accountMode, activeElderId, activeFamilyId, session, setActiveElder, setActiveFamily, setRole],
   );
 
   useEffect(() => {

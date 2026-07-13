@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Link } from 'expo-router';
+import { Link, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, View } from 'react-native';
@@ -10,6 +10,8 @@ import { colors, spacing } from '@/theme';
 import { loginSchema, LoginValues } from '@/validation/auth';
 
 export default function LoginScreen() {
+  const params = useLocalSearchParams<{ inviteToken?: string | string[] }>();
+  const inviteToken = Array.isArray(params.inviteToken) ? params.inviteToken[0] : params.inviteToken;
   const { signIn } = useAuth();
   const [authError, setAuthError] = useState<string | null>(null);
   const {
@@ -26,6 +28,12 @@ export default function LoginScreen() {
 
     try {
       await signIn(email, password);
+      if (inviteToken) {
+        router.replace({
+          pathname: '/join' as never,
+          params: { token: inviteToken, accept: '1' },
+        });
+      }
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : 'Unable to sign in. Please try again.');
     }
@@ -80,7 +88,12 @@ export default function LoginScreen() {
       </View>
       <AppText align="center" color="inkMuted">
         New to CareCircle?{' '}
-        <Link href="/signup" style={styles.link}>
+        <Link
+          href={{
+            pathname: '/signup',
+            params: inviteToken ? { inviteToken } : undefined,
+          }}
+          style={styles.link}>
           Create an account
         </Link>
       </AppText>

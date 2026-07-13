@@ -4,6 +4,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
 import { useAppStore } from '@/store/app-store';
+import { resolveCareContext } from '@/features/care-context/resolveCareContext';
 import { MedicationLog, MedicationWithStatus } from './types';
 
 type MedicationContext = {
@@ -19,7 +20,14 @@ function startOfToday() {
 
 export function useMedications() {
   const { session } = useAuth();
-  const { activeElderId, setActiveElder } = useAppStore();
+  const {
+    accountMode,
+    activeElderId,
+    activeFamilyId,
+    setActiveElder,
+    setActiveFamily,
+    setRole,
+  } = useAppStore();
   const [context, setContext] = useState<MedicationContext | null>(null);
   const [medications, setMedications] = useState<MedicationWithStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -33,34 +41,19 @@ export function useMedications() {
       setError(null);
 
       try {
-        const { data: membership, error: membershipError } = await supabase
-          .from('family_members')
-          .select('family_id')
-          .eq('user_id', session.user.id)
-          .eq('status', 'active')
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .maybeSingle();
-
-        if (membershipError) throw membershipError;
-        if (!membership) throw new Error('No active family circle was found.');
-
-        const { data: elders, error: elderError } = await supabase
-          .from('elder_profiles')
-          .select('id, full_name')
-          .eq('family_id', membership.family_id)
-          .order('created_at', { ascending: true });
-
-        if (elderError) throw elderError;
-        const elder = elders?.find((item) => item.id === activeElderId) ?? elders?.[0];
-        if (!elder) throw new Error('No elder profile was found.');
+        const careContext = await resolveCareContext({
+          accountMode,
+          activeElderId,
+          activeFamilyId,
+          userId: session.user.id,
+        });
 
         const { data: medicationRows, error: medicationError } = await supabase
           .from('medications')
           .select(
             'id, elder_profile_id, name, dosage, instructions, frequency, scheduled_times, start_date, end_date, refill_date, active, created_at, updated_at',
           )
-          .eq('elder_profile_id', elder.id)
+          .eq('elder_profile_id', careContext.elderId)
           .order('active', { ascending: false })
           .order('name', { ascending: true });
 
@@ -85,11 +78,13 @@ export function useMedications() {
           if (!latestLogs.has(log.medication_id)) latestLogs.set(log.medication_id, log);
         }
 
-        setActiveElder(elder.id);
+        setActiveElder(careContext.elderId);
+        setActiveFamily(careContext.familyId);
+        setRole(careContext.role);
         setContext({
-          familyId: membership.family_id,
-          elderId: elder.id,
-          elderName: elder.full_name,
+          familyId: careContext.familyId,
+          elderId: careContext.elderId,
+          elderName: careContext.elderName,
         });
         setMedications(
           (medicationRows ?? []).map((medication) => {
@@ -111,7 +106,7 @@ export function useMedications() {
         setIsRefreshing(false);
       }
     },
-    [activeElderId, session, setActiveElder],
+    [accountMode, activeElderId, activeFamilyId, session, setActiveElder, setActiveFamily, setRole],
   );
 
   useEffect(() => {

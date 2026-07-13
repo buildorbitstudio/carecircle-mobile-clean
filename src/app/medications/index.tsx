@@ -1,15 +1,22 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
+import { CareCalendarView } from '@/components/calendar/CareCalendarView';
 import { AppButton, AppCard, AppText, EmptyState, Screen, SectionHeader } from '@/components/ui';
+import { useCareCalendarItems } from '@/features/calendar/useCareCalendarItems';
 import { MedicationWithStatus } from '@/features/medications/types';
 import { useMedications } from '@/features/medications/useMedications';
 import { colors, radius, spacing } from '@/theme';
 
+type ViewMode = 'list' | 'calendar';
+
 export default function MedicationsScreen() {
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const { context, medications, isLoading, isRefreshing, error, refresh, retry } =
     useMedications();
+  const calendar = useCareCalendarItems();
   const active = medications.filter((medication) => medication.active);
   const inactive = medications.filter((medication) => !medication.active);
 
@@ -38,15 +45,25 @@ export default function MedicationsScreen() {
   }
 
   return (
-    <Screen onRefresh={() => void refresh()} refreshing={isRefreshing}>
-      <SectionHeader
-        description={`Manage schedules and medication logs for ${context?.elderName ?? 'your loved one'}.`}
-        title="Medications"
-      />
-      <AppButton
-        label="Add medication"
-        onPress={() => router.push('/medications/add')}
-      />
+    <Screen
+      onRefresh={() => void (viewMode === 'calendar' ? calendar.refresh() : refresh())}
+      refreshing={viewMode === 'calendar' ? calendar.isRefreshing : isRefreshing}>
+      <View style={styles.headerRow}>
+        <View style={styles.headerCopy}>
+          <SectionHeader
+            description={`Manage schedules and medication logs for ${context?.elderName ?? calendar.context?.elderName ?? 'your loved one'}.`}
+            title="Medications"
+          />
+        </View>
+        <ViewToggle value={viewMode} onChange={setViewMode} />
+      </View>
+
+      {viewMode === 'list' ? (
+        <AppButton
+          label="Add medication"
+          onPress={() => router.push('/medications/add')}
+        />
+      ) : null}
 
       {error ? (
         <View accessibilityRole="alert" style={styles.errorBanner}>
@@ -56,12 +73,60 @@ export default function MedicationsScreen() {
         </View>
       ) : null}
 
-      <MedicationSection medications={active} title={`Active (${active.length})`} />
+      {viewMode === 'calendar' ? (
+        <CareCalendarView
+          appointments={calendar.appointments}
+          error={calendar.error}
+          isLoading={calendar.isLoading}
+          medications={calendar.medications}
+          onRetry={() => void calendar.retry()}
+          tasks={calendar.tasks}
+        />
+      ) : (
+        <>
+          <MedicationSection medications={active} title={`Active (${active.length})`} />
 
-      {inactive.length ? (
-        <MedicationSection medications={inactive} title={`Inactive (${inactive.length})`} />
-      ) : null}
+          {inactive.length ? (
+            <MedicationSection medications={inactive} title={`Inactive (${inactive.length})`} />
+          ) : null}
+        </>
+      )}
     </Screen>
+  );
+}
+
+function ViewToggle({
+  onChange,
+  value,
+}: {
+  onChange: (value: ViewMode) => void;
+  value: ViewMode;
+}) {
+  return (
+    <View accessibilityRole="tablist" style={styles.toggle}>
+      {(['list', 'calendar'] as const).map((mode) => {
+        const selected = value === mode;
+        return (
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected }}
+            key={mode}
+            onPress={() => onChange(mode)}
+            style={[styles.toggleOption, selected && styles.toggleSelected]}>
+            <Ionicons
+              color={selected ? colors.white : colors.primary}
+              name={mode === 'list' ? 'list' : 'calendar'}
+              size={17}
+            />
+            <AppText
+              style={{ color: selected ? colors.white : colors.primary }}
+              variant="caption">
+              {mode === 'list' ? 'List' : 'Calendar'}
+            </AppText>
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }
 
@@ -157,6 +222,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.xxl,
   },
+  headerRow: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between',
+  },
+  headerCopy: { flex: 1 },
+  toggle: {
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.pill,
+    flexDirection: 'row',
+    padding: spacing.xs,
+  },
+  toggleOption: {
+    alignItems: 'center',
+    borderRadius: radius.pill,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    minHeight: 38,
+    paddingHorizontal: spacing.sm,
+  },
+  toggleSelected: { backgroundColor: colors.primary },
   section: { gap: spacing.md },
   row: { alignItems: 'center', flexDirection: 'row', gap: spacing.md, minHeight: 68 },
   pressed: { opacity: 0.65 },

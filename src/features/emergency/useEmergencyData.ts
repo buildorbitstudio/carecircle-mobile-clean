@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
 import { useAppStore } from '@/store/app-store';
+import { resolveCareContext } from '@/features/care-context/resolveCareContext';
 
 export type EmergencyContact = {
   id: string;
@@ -54,7 +55,14 @@ function todayKey() {
 
 export function useEmergencyData() {
   const { session } = useAuth();
-  const { activeElderId, setActiveElder } = useAppStore();
+  const {
+    accountMode,
+    activeElderId,
+    activeFamilyId,
+    setActiveElder,
+    setActiveFamily,
+    setRole,
+  } = useAppStore();
   const [data, setData] = useState<EmergencyData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -67,28 +75,22 @@ export function useEmergencyData() {
       setError(null);
 
       try {
-        const { data: membership, error: membershipError } = await supabase
-          .from('family_members')
-          .select('family_id')
-          .eq('user_id', session.user.id)
-          .eq('status', 'active')
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .maybeSingle();
+        const careContext = await resolveCareContext({
+          accountMode,
+          activeElderId,
+          activeFamilyId,
+          userId: session.user.id,
+        });
 
-        if (membershipError) throw membershipError;
-        if (!membership) throw new Error('No active family circle was found.');
-
-        const { data: elders, error: elderError } = await supabase
+        const { data: elder, error: elderError } = await supabase
           .from('elder_profiles')
           .select(
             'id, full_name, date_of_birth, relationship, phone, address, photo_url, primary_doctor, pharmacy, notes',
           )
-          .eq('family_id', membership.family_id)
-          .order('created_at', { ascending: true });
+          .eq('id', careContext.elderId)
+          .single();
 
         if (elderError) throw elderError;
-        const elder = elders?.find((item) => item.id === activeElderId) ?? elders?.[0];
         if (!elder) throw new Error('No elder profile was found.');
 
         const today = todayKey();
@@ -126,7 +128,9 @@ export function useEmergencyData() {
           contactsResult.error;
         if (queryError) throw queryError;
 
-        setActiveElder(elder.id);
+        setActiveElder(careContext.elderId);
+        setActiveFamily(careContext.familyId);
+        setRole(careContext.role);
         setData({
           elder,
           conditions: conditionsResult.data ?? [],
@@ -145,7 +149,7 @@ export function useEmergencyData() {
         setIsRefreshing(false);
       }
     },
-    [activeElderId, session, setActiveElder],
+    [accountMode, activeElderId, activeFamilyId, session, setActiveElder, setActiveFamily, setRole],
   );
 
   useFocusEffect(

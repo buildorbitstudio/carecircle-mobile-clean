@@ -1,18 +1,34 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { Linking, Pressable, Share, StyleSheet, View } from 'react-native';
 
-import { AppButton, AppCard, AppText, FormField, Screen, SectionHeader } from '@/components/ui';
+import {
+  AppButton,
+  AppCard,
+  AppText,
+  FeedbackBanner,
+  FormField,
+  Screen,
+  SectionHeader,
+} from '@/components/ui';
 import { familyRoles } from '@/features/family/family-config';
+import { buildFamilyInviteLink, buildFamilyInviteMessage } from '@/features/family/invite-links';
 import { useFamilyMembers } from '@/features/family/useFamilyMembers';
 import { supabase } from '@/lib/supabase';
 import { colors, radius, spacing } from '@/theme';
 import { invitationSchema, InvitationValues } from '@/validation/invitation';
 
+type CreatedInvitation = {
+  invite_token: string;
+};
+
 export default function InviteMemberScreen() {
   const { context, isLoading, error: contextError } = useFamilyMembers();
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [shareError, setShareError] = useState<string | null>(null);
   const {
     control,
     handleSubmit,
@@ -29,22 +45,38 @@ export default function InviteMemberScreen() {
       return;
     }
 
-    const { error } = await supabase.rpc('create_family_invitation', {
+    const { data, error } = await supabase.rpc('create_family_invitation', {
       p_family_id: context.familyId,
       p_email: values.email.trim().toLowerCase(),
       p_role: values.role,
     });
 
-    if (error) {
-      setError('root', { message: error.message });
+    if (error || !data) {
+      setError('root', { message: error?.message ?? 'Unable to create invitation link.' });
       return;
     }
 
-    Alert.alert(
-      'Invitation saved',
-      'The pending invitation is stored in CareCircle. No email was sent in this MVP.',
-      [{ text: 'Done', onPress: () => router.replace('/family-members') }],
-    );
+    const invitation = data as CreatedInvitation;
+    const nextInviteLink = buildFamilyInviteLink(invitation.invite_token);
+    setInviteLink(nextInviteLink);
+    setShareError(null);
+  };
+
+  const shareInvite = async () => {
+    if (!inviteLink || !context) return;
+
+    try {
+      await Share.share({
+        title: `Join ${context.familyName} on CareCircle`,
+        message: buildFamilyInviteMessage({
+          familyName: context.familyName,
+          inviteLink,
+        }),
+        url: inviteLink,
+      });
+    } catch (error) {
+      setShareError(error instanceof Error ? error.message : 'Unable to open sharing options.');
+    }
   };
 
   return (
@@ -58,13 +90,46 @@ export default function InviteMemberScreen() {
         <Ionicons color={colors.warning} name="information-circle" size={22} />
         <View style={styles.grow}>
           <AppText color="warning" variant="bodyStrong">
-            MVP invitation
+            Invite link
           </AppText>
           <AppText color="inkMuted" variant="caption">
-            This saves a pending invitation record. It does not send an email yet.
+            CareCircle creates a private joining link. Send it with your normal messaging app.
           </AppText>
         </View>
       </View>
+
+      {inviteLink ? (
+        <AppCard style={styles.linkCard}>
+          <FeedbackBanner
+            message="Send this link to the invited person. After they sign up or sign in, they will join this family circle automatically."
+            title="Invitation link ready"
+            tone="success"
+          />
+          <Pressable
+            accessibilityRole="link"
+            onPress={() => void Linking.openURL(inviteLink)}
+            style={styles.linkBox}>
+            <AppText color="primary" selectable variant="caption">
+              {inviteLink}
+            </AppText>
+          </Pressable>
+          {shareError ? (
+            <View accessibilityRole="alert" style={styles.errorBanner}>
+              <AppText color="danger" variant="caption">
+                {shareError}
+              </AppText>
+            </View>
+          ) : null}
+          <View style={styles.actions}>
+            <AppButton label="Share invite link" onPress={() => void shareInvite()} />
+            <AppButton
+              label="Done"
+              onPress={() => router.replace('/family-members')}
+              variant="secondary"
+            />
+          </View>
+        </AppCard>
+      ) : null}
 
       {contextError ? (
         <View accessibilityRole="alert" style={styles.errorBanner}>
@@ -144,7 +209,7 @@ export default function InviteMemberScreen() {
 
       <AppButton
         disabled={!context?.isAdmin || isLoading}
-        label="Save pending invitation"
+        label="Create joining link"
         loading={isSubmitting}
         onPress={handleSubmit(submit)}
       />
@@ -179,4 +244,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     padding: spacing.md,
   },
+  linkCard: { gap: spacing.md },
+  linkBox: {
+    backgroundColor: colors.surfaceMuted,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    padding: spacing.md,
+  },
+  actions: { gap: spacing.md },
 });

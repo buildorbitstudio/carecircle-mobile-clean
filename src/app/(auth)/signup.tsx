@@ -1,17 +1,27 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Link, router } from 'expo-router';
+import { Link, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { Alert, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { AppButton, AppText, FormField, Screen, SectionHeader } from '@/components/ui';
+import {
+  AppButton,
+  AppText,
+  FeedbackBanner,
+  FormField,
+  Screen,
+  SectionHeader,
+} from '@/components/ui';
 import { useAuth } from '@/providers/AuthProvider';
 import { colors, spacing } from '@/theme';
 import { signupSchema, SignupValues } from '@/validation/auth';
 
 export default function SignupScreen() {
+  const params = useLocalSearchParams<{ inviteToken?: string | string[] }>();
+  const inviteToken = Array.isArray(params.inviteToken) ? params.inviteToken[0] : params.inviteToken;
   const { signUp } = useAuth();
   const [authError, setAuthError] = useState<string | null>(null);
+  const [confirmationEmail, setConfirmationEmail] = useState<string | null>(null);
   const {
     control,
     handleSubmit,
@@ -23,17 +33,23 @@ export default function SignupScreen() {
 
   const submit = async ({ email, fullName, password }: SignupValues) => {
     setAuthError(null);
+    setConfirmationEmail(null);
 
     try {
       const { requiresEmailConfirmation } = await signUp({ email, fullName, password });
 
       if (requiresEmailConfirmation) {
-        Alert.alert(
-          'Check your email',
-          'We sent you a confirmation link. Confirm your email, then return to CareCircle and sign in.',
-          [{ text: 'Go to sign in', onPress: () => router.replace('/login') }],
-        );
+        setConfirmationEmail(email.trim().toLowerCase());
+        return;
       }
+      if (inviteToken) {
+        router.replace({
+          pathname: '/join' as never,
+          params: { token: inviteToken, accept: '1' },
+        });
+        return;
+      }
+      router.replace('/(onboarding)' as never);
     } catch (error) {
       setAuthError(
         error instanceof Error ? error.message : 'Unable to create your account. Please try again.',
@@ -118,15 +134,39 @@ export default function SignupScreen() {
             </AppText>
           </View>
         ) : null}
-        <AppButton
-          label="Create account"
-          loading={isSubmitting}
-          onPress={handleSubmit(submit)}
-        />
+        {confirmationEmail ? (
+          <>
+            <FeedbackBanner
+              message={`We sent a confirmation link to ${confirmationEmail}. Confirm your email, then sign in${inviteToken ? ' from this invite link' : ''} to continue.`}
+              title="Check your email"
+              tone="success"
+            />
+            <AppButton
+              label="Go to sign in"
+              onPress={() =>
+                router.replace({
+                  pathname: '/login',
+                  params: inviteToken ? { inviteToken } : undefined,
+                })
+              }
+            />
+          </>
+        ) : (
+          <AppButton
+            label="Create account"
+            loading={isSubmitting}
+            onPress={handleSubmit(submit)}
+          />
+        )}
       </View>
       <AppText align="center" color="inkMuted">
         Already have an account?{' '}
-        <Link href="/login" style={styles.link}>
+        <Link
+          href={{
+            pathname: '/login',
+            params: inviteToken ? { inviteToken } : undefined,
+          }}
+          style={styles.link}>
           Sign in
         </Link>
       </AppText>
